@@ -1,0 +1,12 @@
+# 构建输出
+/build/
+.compile_commands/
+
+# Vitis IDE
+/_ide/
+
+# 编辑器缓存
+.cache/
+.clangd
+compile_commands.json
+app.yaml

@@ -1,0 +1,27 @@
+/ {
+	amba_pl: amba_pl {
+		ranges;
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		firmware-name = "gpu_system_wrapper.bit.bin";
+		clocking0: clocking0 {
+			compatible = "xlnx,fclk";
+			assigned-clocks = <&clkc 15>;
+			assigned-clock-rates = <50000000>;
+			#clock-cells = <0>;
+			clock-output-names = "fabric_clk";
+			clocks = <&clkc 15>;
+		};
+		gpu_soc_wrapper_v_0: gpu_soc_wrapper_v@40000000 {
+			compatible = "xlnx,gpu-soc-wrapper-v-1.0";
+			status = "okay";
+			clock-names = "S_AXI_ACLK";
+			xlnx,ip-name = "gpu_soc_wrapper_v";
+			xlnx,edk-iptype = "PERIPHERAL";
+			reg = <0x40000000 0x40000000>;
+			clocks = <&clkc 15>;
+			xlnx,name = "gpu_soc_wrapper_v_0";
+		};
+	};
+};
