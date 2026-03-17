@@ -15,20 +15,23 @@ module gpu_alu_lane (
         case (alu_op)
             ALU_ADD: result = operand_a + operand_b;
             ALU_SUB: result = operand_a - operand_b;
+            ALU_MUL: result = operand_a * operand_b;
             ALU_AND: result = operand_a & operand_b;
             ALU_OR:  result = operand_a | operand_b;
             ALU_XOR: result = operand_a ^ operand_b;
-            OP_LDR:  result = operand_a + operand_b; 
-            OP_STR:  result = operand_a + operand_b; 
-            
-            // 处理SETM指令，相减判断是否相等
-            OP_SETM: result = operand_a - operand_b; 
-            
+            ALU_SLL: result = operand_a << operand_b[4:0];
+            ALU_SRL: result = operand_a >> operand_b[4:0];
+            ALU_SLT: result = {31'b0, $signed(operand_a) < $signed(operand_b)};
+            OP_LDR:  result = operand_a + operand_b;
+            OP_STR:  result = operand_a + operand_b;
+            OP_SETM: result = operand_a - operand_b;
+            OP_ADDI: result = operand_a + operand_b;
+            OP_BEQ:  result = operand_a - operand_b;
+            OP_BNE:  result = operand_a - operand_b;
             default: result = 32'b0;
         endcase
     end
 
-    // 如果结果为0，则flag_zero为1
     assign flag_zero = (result == 32'h0);
 
 endmodule

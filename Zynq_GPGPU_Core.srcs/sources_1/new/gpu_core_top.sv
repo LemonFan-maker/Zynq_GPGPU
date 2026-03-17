@@ -1,43 +1,50 @@
 `timescale 1ns / 1ps
 import gpu_types_pkg::*;
 
-module gpu_core_top #(
-    parameter NUM_LANES = 4
-)(
+module gpu_core_top (
     input  logic        clk,
     input  logic        rst_n,
-    
-    // 指令内存接口
+
     output logic [31:0] out_imem_addr,
     input  logic [31:0] in_imem_data,
-    
-    // 数据内存接口
+
     output logic        out_dmem_re,
-    output logic [NUM_LANES-1:0]  out_dmem_we,    // 16个写使能位
-    output logic [31:0] out_dmem_addr,            // 标量基地址
-    output logic [(NUM_LANES*32)-1:0] out_dmem_wdata, // 512位宽写数据
-    input  logic [(NUM_LANES*32)-1:0] in_dmem_rdata,  // 512位宽读数据
-    
-    output logic [NUM_LANES-1:0]  out_flag_zero   // 16 个状态标志位
+    output logic [3:0]  out_dmem_we,
+    output logic [31:0] out_dmem_addr,
+    output logic [127:0] out_dmem_wdata,
+    input  logic [127:0] in_dmem_rdata,
+
+    output logic [3:0]  out_flag_zero
 );
 
-    // 内部总线连线
-    logic        we;
-    logic [4:0]  rd_addr;
-    logic [4:0]  rs1_addr;
-    logic [4:0]  rs2_addr;
-    alu_op_t     alu_op;
-    logic [31:0] imm;
-    logic        mem_re;
-    logic        mem_we;
-
-    // 标量取指译码单元
+    // PC寄存器
     logic [31:0] pc;
     assign out_imem_addr = pc;
 
+    // Decoder输出
+    logic        dec_we;
+    logic [4:0]  dec_rd_addr;
+    logic [4:0]  dec_rs1_addr;
+    logic [4:0]  dec_rs2_addr;
+    alu_op_t     dec_alu_op;
+    logic [31:0] dec_imm;
+    logic        dec_mem_re;
+    logic        dec_mem_we;
+    logic        dec_is_branch;
+    logic        dec_is_jump;
+    logic        dec_is_addi;
+
+    // 分支判断
+    logic        branch_taken;
+
+    // PC逻辑
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             pc <= 32'h0;
+        end else if (dec_is_jump) begin
+            pc <= {19'b0, dec_imm[12:0]};
+        end else if (dec_is_branch && branch_taken) begin
+            pc <= pc + dec_imm;
         end else begin
             pc <= pc + 1'b1;
         end
@@ -45,36 +52,41 @@ module gpu_core_top #(
 
     gpu_decoder u_decoder (
         .instruction  (in_imem_data),
-        .out_we       (we),
-        .out_rd_addr  (rd_addr),
-        .out_rs1_addr (rs1_addr),
-        .out_rs2_addr (rs2_addr),
-        .out_alu_op   (alu_op),
-        .out_imm      (imm),
-        .out_mem_re   (mem_re),
-        .out_mem_we   (mem_we)
+        .out_we       (dec_we),
+        .out_rd_addr  (dec_rd_addr),
+        .out_rs1_addr (dec_rs1_addr),
+        .out_rs2_addr (dec_rs2_addr),
+        .out_alu_op   (dec_alu_op),
+        .out_imm      (dec_imm),
+        .out_mem_re   (dec_mem_re),
+        .out_mem_we   (dec_mem_we),
+        .out_is_branch(dec_is_branch),
+        .out_is_jump  (dec_is_jump),
+        .out_is_addi  (dec_is_addi)
     );
 
-    // 并行向量执行单元
-    gpu_exec_unit #(
-        .NUM_LANES (NUM_LANES)
-    ) u_exec_unit (
+    gpu_exec_unit #( .NUM_LANES(4) ) u_exec_unit (
         .clk            (clk),
         .rst_n          (rst_n),
-        .in_we          (we),
-        .in_rd_addr     (rd_addr),
-        .in_rs1_addr    (rs1_addr),
-        .in_rs2_addr    (rs2_addr),
-        .in_alu_op      (alu_op),
-        .in_imm         (imm),
-        .in_mem_re      (mem_re),
-        .in_mem_we      (mem_we),
+        .in_we          (dec_we),
+        .in_rd_addr     (dec_rd_addr),
+        .in_rs1_addr    (dec_rs1_addr),
+        .in_rs2_addr    (dec_rs2_addr),
+        .in_alu_op      (dec_alu_op),
+        .in_imm         (dec_imm),
+        .in_mem_re      (dec_mem_re),
+        .in_mem_we      (dec_mem_we),
+        .in_is_addi     (dec_is_addi),
+        .in_flush       (1'b0),
+
         .out_dmem_re    (out_dmem_re),
         .out_dmem_we    (out_dmem_we),
         .out_dmem_addr  (out_dmem_addr),
         .out_dmem_wdata (out_dmem_wdata),
         .in_dmem_rdata  (in_dmem_rdata),
-        .out_flag_zero  (out_flag_zero)
+
+        .out_flag_zero  (out_flag_zero),
+        .out_branch_taken(branch_taken)
     );
 
 endmodule
