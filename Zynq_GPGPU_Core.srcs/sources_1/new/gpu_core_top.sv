@@ -33,9 +33,12 @@ module gpu_core_top (
     logic        dec_is_branch;
     logic        dec_is_jump;
     logic        dec_is_addi;
+    logic        dec_is_mac;
 
     // 分支判断
     logic        branch_taken;
+
+    // PC跳转后，下一周期自然解码目标地址的指令，无需flush
 
     // PC逻辑
     always_ff @(posedge clk or negedge rst_n) begin
@@ -62,7 +65,8 @@ module gpu_core_top (
         .out_mem_we   (dec_mem_we),
         .out_is_branch(dec_is_branch),
         .out_is_jump  (dec_is_jump),
-        .out_is_addi  (dec_is_addi)
+        .out_is_addi  (dec_is_addi),
+        .out_is_mac   (dec_is_mac)
     );
 
     gpu_exec_unit #( .NUM_LANES(4) ) u_exec_unit (
@@ -77,6 +81,7 @@ module gpu_core_top (
         .in_mem_re      (dec_mem_re),
         .in_mem_we      (dec_mem_we),
         .in_is_addi     (dec_is_addi),
+        .in_is_mac      (dec_is_mac),
         .in_flush       (1'b0),
 
         .out_dmem_re    (out_dmem_re),

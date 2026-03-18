@@ -14,7 +14,8 @@ module gpu_decoder (
     output logic        out_mem_we,
     output logic        out_is_branch,
     output logic        out_is_jump,
-    output logic        out_is_addi
+    output logic        out_is_addi,
+    output logic        out_is_mac
 );
 
     logic [3:0] opcode;
@@ -46,6 +47,7 @@ module gpu_decoder (
         out_is_branch = 1'b0;
         out_is_jump   = 1'b0;
         out_is_addi   = 1'b0;
+        out_is_mac    = 1'b0;
         out_alu_op    = ALU_ADD;
 
         case (opcode)
@@ -57,9 +59,10 @@ module gpu_decoder (
                 out_alu_op = ALU_SUB;
                 out_we     = 1'b1;
             end
-            4'h2: begin // MUL
+            4'h2: begin // MUL (imm8[0]=0) or MAC (imm8[0]=1)
                 out_alu_op = ALU_MUL;
                 out_we     = 1'b1;
+                out_is_mac = instruction[0];
             end
             4'h3: begin // AND
                 out_alu_op = ALU_AND;

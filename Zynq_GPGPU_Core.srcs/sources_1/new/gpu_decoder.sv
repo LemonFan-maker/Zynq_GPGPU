@@ -14,7 +14,8 @@ module gpu_decoder (
     output logic        out_mem_we,
     output logic        out_is_branch,
     output logic        out_is_jump,
-    output logic        out_is_addi
+    output logic        out_is_addi,
+    output logic        out_is_mac
 );
 
     logic [3:0] opcode;
@@ -22,14 +23,15 @@ module gpu_decoder (
     assign out_rd_addr  = instruction[27:23];
     assign out_rs1_addr = instruction[12:8];
 
-    // rs2:普通指令用[17:13]，BEQ/BNE借用rd字段[27:23]做比较源
+    // rs2: 普通指令用 [17:13]，BEQ/BNE 借用 rd 字段 [27:23] 做比较源
     assign out_rs2_addr = (opcode == 4'hD || opcode == 4'hE) ?
                           instruction[27:23] : instruction[17:13];
 
+    // imm8: 8-bit 符号扩展 (用于LDR/STR)
     logic [31:0] imm8_sext;
     assign imm8_sext = {{24{instruction[7]}}, instruction[7:0]};
 
-    // imm13:{[17:13],[7:0]}符号扩展
+    // imm13: {[17:13], [7:0]} 符号扩展 (用于ADDI/BEQ/BNE/JMP)
     logic [12:0] imm13_raw;
     assign imm13_raw = {instruction[17:13], instruction[7:0]};
     logic [31:0] imm13_sext;
@@ -45,6 +47,7 @@ module gpu_decoder (
         out_is_branch = 1'b0;
         out_is_jump   = 1'b0;
         out_is_addi   = 1'b0;
+        out_is_mac    = 1'b0;
         out_alu_op    = ALU_ADD;
 
         case (opcode)
@@ -56,9 +59,10 @@ module gpu_decoder (
                 out_alu_op = ALU_SUB;
                 out_we     = 1'b1;
             end
-            4'h2: begin // MUL
+            4'h2: begin // MUL (imm8[0]=0) or MAC (imm8[0]=1)
                 out_alu_op = ALU_MUL;
                 out_we     = 1'b1;
+                out_is_mac = instruction[0];
             end
             4'h3: begin // AND
                 out_alu_op = ALU_AND;

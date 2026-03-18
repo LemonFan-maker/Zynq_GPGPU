@@ -15,6 +15,7 @@ module gpu_exec_unit #(
     input  logic        in_mem_re,
     input  logic        in_mem_we,
     input  logic        in_is_addi,
+    input  logic        in_is_mac,
     input  logic        in_flush,
 
     output logic        out_dmem_re,
@@ -31,14 +32,15 @@ module gpu_exec_unit #(
     logic       we_pipe;
     logic [4:0] rd_addr_pipe;
     logic       wb_sel_pipe;
+    logic       mac_pipe;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0;
+            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0; mac_pipe <= 0;
         end else if (in_flush) begin
-            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0;
+            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0; mac_pipe <= 0;
         end else begin
-            we_pipe <= in_we; rd_addr_pipe <= in_rd_addr; wb_sel_pipe <= in_mem_re;
+            we_pipe <= in_we; rd_addr_pipe <= in_rd_addr; wb_sel_pipe <= in_mem_re; mac_pipe <= in_is_mac;
         end
     end
 
@@ -56,28 +58,36 @@ module gpu_exec_unit #(
     // Lane数据线
     logic [31:0] lane_rdata1 [NUM_LANES];
     logic [31:0] lane_rdata2 [NUM_LANES];
+    logic [31:0] lane_rdata3 [NUM_LANES];
     logic [31:0] lane_alu_res [NUM_LANES];
-    logic [31:0] lane_alu_res_pipe [NUM_LANES]; // ALU结果打一拍，和we_pipe对齐
+    logic [31:0] lane_alu_res_pipe [NUM_LANES];
     logic [31:0] lane_lsu_res [NUM_LANES];
 
     logic [NUM_LANES*32-1:0] lsu_wdata_packed;
     logic [NUM_LANES*32-1:0] lsu_rdata_packed;
 
+    logic [31:0] lane_rd_old_pipe [NUM_LANES];
+
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            for (int j = 0; j < NUM_LANES; j++)
+            for (int j = 0; j < NUM_LANES; j++) begin
                 lane_alu_res_pipe[j] <= 32'h0;
+                lane_rd_old_pipe[j]  <= 32'h0;
+            end
         end else begin
-            for (int j = 0; j < NUM_LANES; j++)
+            for (int j = 0; j < NUM_LANES; j++) begin
                 lane_alu_res_pipe[j] <= lane_alu_res[j];
+                lane_rd_old_pipe[j]  <= lane_rdata3[j];
+            end
         end
     end
 
-    // 用Lane0的寄存器值做比较
+    // 分支判断：用Lane0的寄存器值做比较（组合逻辑，同周期可用）
     assign out_branch_taken = (in_alu_op == OP_BEQ) ? (lane_rdata1[0] == lane_rdata2[0]) :
                               (in_alu_op == OP_BNE) ? (lane_rdata1[0] != lane_rdata2[0]) :
                               1'b0;
 
+    // ADDI: operand_b用imm替代rs2
     logic [31:0] alu_opb [NUM_LANES];
 
     genvar i;
@@ -88,16 +98,22 @@ module gpu_exec_unit #(
 
             assign out_dmem_we[i] = in_mem_we & exec_mask[i];
 
+            // ADDI时operand_b用立即数
             assign alu_opb[i] = in_is_addi ? in_imm : lane_rdata2[i];
 
+            // MAC: rd = rd_old + rs1*rs2, MUL: rd = rs1*rs2, 其他: rd = alu_result
+            logic [31:0] alu_or_mac;
+            assign alu_or_mac = mac_pipe ? (lane_rd_old_pipe[i] + lane_alu_res_pipe[i]) : lane_alu_res_pipe[i];
+
             logic [31:0] final_wb;
-            assign final_wb = (wb_sel_pipe) ? lane_lsu_res[i] : lane_alu_res_pipe[i];
+            assign final_wb = (wb_sel_pipe) ? lane_lsu_res[i] : alu_or_mac;
 
             gpu_regfile u_rf (
                 .clk(clk), .we(we_pipe & exec_mask[i]),
                 .waddr(rd_addr_pipe), .wdata(final_wb),
                 .raddr1(in_rs1_addr), .rdata1(lane_rdata1[i]),
-                .raddr2(in_rs2_addr), .rdata2(lane_rdata2[i])
+                .raddr2(in_rs2_addr), .rdata2(lane_rdata2[i]),
+                .raddr3(in_rd_addr),  .rdata3(lane_rdata3[i])
             );
 
             gpu_alu_lane u_alu (

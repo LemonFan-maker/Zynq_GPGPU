@@ -28,15 +28,16 @@ module gpu_soc_wrapper (
 );
 
     // =========================================================================
-    // 内存: DMEM 拆成 4 个 bank, 每 lane 一个 32-bit 宽的 RAM
-    // 这样 Vivado 能正确推断 BRAM/分布式 RAM
+    // 内存参数
     // =========================================================================
-    logic [31:0] imem [0:255];
+    localparam IMEM_DEPTH = 256;    // 256 条指令
+    localparam DMEM_DEPTH = 4096;   // 4096 entries × 4 lanes × 32-bit = 64KB
+    localparam DMEM_ADDR_W = 12;    // log2(4096)
 
-    logic [31:0] dmem_bank0 [0:255];
-    logic [31:0] dmem_bank1 [0:255];
-    logic [31:0] dmem_bank2 [0:255];
-    logic [31:0] dmem_bank3 [0:255];
+    // =========================================================================
+    // 内存: DMEM 使用独立 BRAM 模块, 保证 Vivado 正确推断
+    // =========================================================================
+    logic [31:0] imem [0:IMEM_DEPTH-1];
 
     // =========================================================================
     // 控制/状态寄存器
@@ -89,30 +90,39 @@ module gpu_soc_wrapper (
     end
 
     // AXI 写: 解码地址区域
+    // 地址映射 (16-bit 偏移):
+    //   0x0000        : CTRL  (bit0 = start)
+    //   0x0004        : STATUS
+    //   0x0100-0x04FF : IMEM  (256 × 4 bytes)
+    //   0x1000-0x8FFF : DMEM  (2048 entries × 16 bytes)
     logic        axi_wr_valid;
-    logic [12:0] axi_wr_addr;
+    logic [15:0] axi_wr_addr;
     assign axi_wr_valid = axi_wready_reg && S_AXI_WVALID && axi_awready_reg && S_AXI_AWVALID;
-    assign axi_wr_addr  = axi_awaddr_reg[12:0];
+    assign axi_wr_addr  = axi_awaddr_reg[15:0];
 
     // AXI 写 DMEM 时的 index 和 lane
-    logic [7:0] axi_dmem_idx;
-    logic [1:0] axi_dmem_lane;
-    assign axi_dmem_idx  = axi_awaddr_reg[11:4];
+    // entry index: addr[15:4], lane: addr[3:2]
+    // DMEM 基地址 0x1000, 所以 entry = (addr - 0x1000) >> 4 = addr[15:4] - 0x100
+    // 简化: entry = (addr >> 4) - 'h100 ... 不好算
+    // 直接用: entry = (addr - 16'h1000) >> 4
+    logic [DMEM_ADDR_W-1:0] axi_dmem_idx;
+    logic [1:0]             axi_dmem_lane;
+    assign axi_dmem_idx  = (axi_wr_addr - 16'h1000) >> 4;
     assign axi_dmem_lane = axi_awaddr_reg[3:2];
 
     // CTRL 寄存器
     always_ff @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
         if (!S_AXI_ARESETN) begin
             gpu_start_run <= 1'b0;
-        end else if (axi_wr_valid && axi_wr_addr == 13'h000) begin
+        end else if (axi_wr_valid && axi_wr_addr == 16'h0000) begin
             gpu_start_run <= S_AXI_WDATA[0];
         end
     end
 
     // IMEM 写 (只有 AXI 写, GPU 只读)
     always_ff @(posedge S_AXI_ACLK) begin
-        if (axi_wr_valid && axi_wr_addr >= 13'h100 && axi_wr_addr <= 13'h4FF) begin
-            imem[(axi_wr_addr - 13'h100) >> 2] <= S_AXI_WDATA;
+        if (axi_wr_valid && axi_wr_addr >= 16'h0100 && axi_wr_addr <= 16'h04FF) begin
+            imem[(axi_wr_addr - 16'h0100) >> 2] <= S_AXI_WDATA;
         end
     end
 
@@ -132,62 +142,56 @@ module gpu_soc_wrapper (
     assign gpu_imem_data = imem[gpu_imem_addr[7:0]];
 
     // =========================================================================
-    // DMEM Bank 0 — 单写口: GPU 运行时 GPU 写, 否则 AXI 写
+    // DMEM — 4 × True Dual-Port BRAM (独立模块, 保证推断)
+    // Port A: GPU (读+写)    Port B: AXI (读+写)
     // =========================================================================
-    logic        axi_wr_dmem_bank0;
-    assign axi_wr_dmem_bank0 = axi_wr_valid && (axi_wr_addr >= 13'h1000) && (axi_dmem_lane == 2'd0);
+    logic axi_wr_dmem_bank0, axi_wr_dmem_bank1, axi_wr_dmem_bank2, axi_wr_dmem_bank3;
+    assign axi_wr_dmem_bank0 = axi_wr_valid && (axi_wr_addr >= 16'h1000) && (axi_dmem_lane == 2'd0);
+    assign axi_wr_dmem_bank1 = axi_wr_valid && (axi_wr_addr >= 16'h1000) && (axi_dmem_lane == 2'd1);
+    assign axi_wr_dmem_bank2 = axi_wr_valid && (axi_wr_addr >= 16'h1000) && (axi_dmem_lane == 2'd2);
+    assign axi_wr_dmem_bank3 = axi_wr_valid && (axi_wr_addr >= 16'h1000) && (axi_dmem_lane == 2'd3);
 
-    always_ff @(posedge S_AXI_ACLK) begin
-        if (gpu_dmem_we[0])
-            dmem_bank0[gpu_dmem_addr[7:0]] <= gpu_dmem_wdata[31:0];
-        else if (axi_wr_dmem_bank0)
-            dmem_bank0[axi_dmem_idx] <= S_AXI_WDATA;
-    end
+    logic [DMEM_ADDR_W-1:0] gpu_dmem_idx;
+    assign gpu_dmem_idx = gpu_dmem_addr[DMEM_ADDR_W-1:0];
 
-    // DMEM Bank 1
-    logic        axi_wr_dmem_bank1;
-    assign axi_wr_dmem_bank1 = axi_wr_valid && (axi_wr_addr >= 13'h1000) && (axi_dmem_lane == 2'd1);
+    logic [31:0] dmem_rd_bank0, dmem_rd_bank1, dmem_rd_bank2, dmem_rd_bank3;
+    logic [DMEM_ADDR_W-1:0] axi_rd_dmem_idx;
+    logic [1:0]             axi_rd_dmem_lane;
 
-    always_ff @(posedge S_AXI_ACLK) begin
-        if (gpu_dmem_we[1])
-            dmem_bank1[gpu_dmem_addr[7:0]] <= gpu_dmem_wdata[63:32];
-        else if (axi_wr_dmem_bank1)
-            dmem_bank1[axi_dmem_idx] <= S_AXI_WDATA;
-    end
+    assign axi_rd_dmem_idx  = (axi_araddr_reg[15:0] - 16'h1000) >> 4;
+    assign axi_rd_dmem_lane = axi_araddr_reg[3:2];
 
-    // DMEM Bank 2
-    logic        axi_wr_dmem_bank2;
-    assign axi_wr_dmem_bank2 = axi_wr_valid && (axi_wr_addr >= 13'h1000) && (axi_dmem_lane == 2'd2);
+    gpu_tdp_bram #(.ADDR_WIDTH(DMEM_ADDR_W), .DATA_WIDTH(32)) u_bank0 (
+        .clk(S_AXI_ACLK),
+        .we_a(gpu_dmem_we[0]), .addr_a(gpu_dmem_idx),
+        .din_a(gpu_dmem_wdata[31:0]), .dout_a(gpu_dmem_rdata[31:0]),
+        .we_b(axi_wr_dmem_bank0), .addr_b(axi_wr_dmem_bank0 ? axi_dmem_idx : axi_rd_dmem_idx),
+        .din_b(S_AXI_WDATA), .dout_b(dmem_rd_bank0)
+    );
 
-    always_ff @(posedge S_AXI_ACLK) begin
-        if (gpu_dmem_we[2])
-            dmem_bank2[gpu_dmem_addr[7:0]] <= gpu_dmem_wdata[95:64];
-        else if (axi_wr_dmem_bank2)
-            dmem_bank2[axi_dmem_idx] <= S_AXI_WDATA;
-    end
+    gpu_tdp_bram #(.ADDR_WIDTH(DMEM_ADDR_W), .DATA_WIDTH(32)) u_bank1 (
+        .clk(S_AXI_ACLK),
+        .we_a(gpu_dmem_we[1]), .addr_a(gpu_dmem_idx),
+        .din_a(gpu_dmem_wdata[63:32]), .dout_a(gpu_dmem_rdata[63:32]),
+        .we_b(axi_wr_dmem_bank1), .addr_b(axi_wr_dmem_bank1 ? axi_dmem_idx : axi_rd_dmem_idx),
+        .din_b(S_AXI_WDATA), .dout_b(dmem_rd_bank1)
+    );
 
-    // DMEM Bank 3
-    logic        axi_wr_dmem_bank3;
-    assign axi_wr_dmem_bank3 = axi_wr_valid && (axi_wr_addr >= 13'h1000) && (axi_dmem_lane == 2'd3);
+    gpu_tdp_bram #(.ADDR_WIDTH(DMEM_ADDR_W), .DATA_WIDTH(32)) u_bank2 (
+        .clk(S_AXI_ACLK),
+        .we_a(gpu_dmem_we[2]), .addr_a(gpu_dmem_idx),
+        .din_a(gpu_dmem_wdata[95:64]), .dout_a(gpu_dmem_rdata[95:64]),
+        .we_b(axi_wr_dmem_bank2), .addr_b(axi_wr_dmem_bank2 ? axi_dmem_idx : axi_rd_dmem_idx),
+        .din_b(S_AXI_WDATA), .dout_b(dmem_rd_bank2)
+    );
 
-    always_ff @(posedge S_AXI_ACLK) begin
-        if (gpu_dmem_we[3])
-            dmem_bank3[gpu_dmem_addr[7:0]] <= gpu_dmem_wdata[127:96];
-        else if (axi_wr_dmem_bank3)
-            dmem_bank3[axi_dmem_idx] <= S_AXI_WDATA;
-    end
-
-    // =========================================================================
-    // DMEM GPU 读 (同步读, 组装 128-bit)
-    // =========================================================================
-    always_ff @(posedge S_AXI_ACLK) begin
-        if (gpu_dmem_re) begin
-            gpu_dmem_rdata[31:0]   <= dmem_bank0[gpu_dmem_addr[7:0]];
-            gpu_dmem_rdata[63:32]  <= dmem_bank1[gpu_dmem_addr[7:0]];
-            gpu_dmem_rdata[95:64]  <= dmem_bank2[gpu_dmem_addr[7:0]];
-            gpu_dmem_rdata[127:96] <= dmem_bank3[gpu_dmem_addr[7:0]];
-        end
-    end
+    gpu_tdp_bram #(.ADDR_WIDTH(DMEM_ADDR_W), .DATA_WIDTH(32)) u_bank3 (
+        .clk(S_AXI_ACLK),
+        .we_a(gpu_dmem_we[3]), .addr_a(gpu_dmem_idx),
+        .din_a(gpu_dmem_wdata[127:96]), .dout_a(gpu_dmem_rdata[127:96]),
+        .we_b(axi_wr_dmem_bank3), .addr_b(axi_wr_dmem_bank3 ? axi_dmem_idx : axi_rd_dmem_idx),
+        .din_b(S_AXI_WDATA), .dout_b(dmem_rd_bank3)
+    );
 
     // =========================================================================
     // AXI-Lite 读通道
@@ -202,24 +206,6 @@ module gpu_soc_wrapper (
     assign S_AXI_RDATA   = axi_rdata_reg;
     assign S_AXI_RRESP   = 2'b00;
 
-    // DMEM AXI 读: 先同步读 4 个 bank, 再用 lane 选择
-    logic [31:0] dmem_rd_bank0, dmem_rd_bank1, dmem_rd_bank2, dmem_rd_bank3;
-    logic [7:0]  axi_rd_dmem_idx;
-    logic [1:0]  axi_rd_dmem_lane;
-    logic        axi_rd_pending;
-    logic [12:0] axi_rd_addr_latched;
-
-    assign axi_rd_dmem_idx  = axi_araddr_reg[11:4];
-    assign axi_rd_dmem_lane = axi_araddr_reg[3:2];
-
-    // 同步读 DMEM (与 AXI 读地址对齐)
-    always_ff @(posedge S_AXI_ACLK) begin
-        dmem_rd_bank0 <= dmem_bank0[axi_rd_dmem_idx];
-        dmem_rd_bank1 <= dmem_bank1[axi_rd_dmem_idx];
-        dmem_rd_bank2 <= dmem_bank2[axi_rd_dmem_idx];
-        dmem_rd_bank3 <= dmem_bank3[axi_rd_dmem_idx];
-    end
-
     // lane 选择 mux (组合)
     logic [31:0] dmem_rd_selected;
     always_comb begin
@@ -231,13 +217,16 @@ module gpu_soc_wrapper (
         endcase
     end
 
-    // AXI 读状态机 (2 拍: 接收地址 → 返回数据)
+    // AXI 读状态机
     typedef enum logic [1:0] {
         RD_IDLE   = 2'b00,
         RD_WAIT   = 2'b01,
         RD_RESP   = 2'b10
     } rd_state_t;
     rd_state_t rd_state;
+
+    logic [15:0] axi_rd_addr;
+    assign axi_rd_addr = axi_araddr_reg[15:0];
 
     always_ff @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
         if (!S_AXI_ARESETN) begin
@@ -258,28 +247,25 @@ module gpu_soc_wrapper (
                 end
 
                 RD_WAIT: begin
-                    // 这一拍: 地址已锁存, 同步 RAM 读出数据
                     axi_arready_reg <= 1'b0;
                     rd_state        <= RD_RESP;
                 end
 
                 RD_RESP: begin
                     if (!axi_rvalid_reg) begin
-                        // 第一拍: 拉高 RVALID, 加载数据
                         axi_rvalid_reg <= 1'b1;
 
-                        if (axi_araddr_reg[12:0] == 13'h000)
+                        if (axi_rd_addr == 16'h0000)
                             axi_rdata_reg <= {31'b0, gpu_start_run};
-                        else if (axi_araddr_reg[12:0] == 13'h004)
+                        else if (axi_rd_addr == 16'h0004)
                             axi_rdata_reg <= {31'b0, gpu_start_run};
-                        else if (axi_araddr_reg[12:0] >= 13'h100 && axi_araddr_reg[12:0] <= 13'h4FF)
-                            axi_rdata_reg <= imem[(axi_araddr_reg[12:0] - 13'h100) >> 2];
-                        else if (axi_araddr_reg[12:0] >= 13'h1000)
+                        else if (axi_rd_addr >= 16'h0100 && axi_rd_addr <= 16'h04FF)
+                            axi_rdata_reg <= imem[(axi_rd_addr - 16'h0100) >> 2];
+                        else if (axi_rd_addr >= 16'h1000)
                             axi_rdata_reg <= dmem_rd_selected;
                         else
                             axi_rdata_reg <= 32'h0;
                     end else if (S_AXI_RREADY) begin
-                        // 第二拍: RVALID 已高, RREADY 握手完成
                         axi_rvalid_reg <= 1'b0;
                         rd_state       <= RD_IDLE;
                     end
