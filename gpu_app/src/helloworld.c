@@ -18,7 +18,7 @@ int main()
 {
     Xil_DCacheDisable();
 
-    // 停止 GPU
+    // 停止GPU
     Xil_Out32(GPU_CTRL_REG, 0);
 
     // 上传程序

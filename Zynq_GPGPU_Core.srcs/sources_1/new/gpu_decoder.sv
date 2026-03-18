@@ -23,15 +23,15 @@ module gpu_decoder (
     assign out_rd_addr  = instruction[27:23];
     assign out_rs1_addr = instruction[12:8];
 
-    // rs2: 普通指令用 [17:13]，BEQ/BNE 借用 rd 字段 [27:23] 做比较源
+    // rs2: 普通指令用[17:13]，BEQ/BNE借用rd字段[27:23]做比较源
     assign out_rs2_addr = (opcode == 4'hD || opcode == 4'hE) ?
                           instruction[27:23] : instruction[17:13];
 
-    // imm8: 8-bit 符号扩展 (用于LDR/STR)
+    // imm8: 8-bit符号扩展 (用于LDR/STR)
     logic [31:0] imm8_sext;
     assign imm8_sext = {{24{instruction[7]}}, instruction[7:0]};
 
-    // imm13: {[17:13], [7:0]} 符号扩展 (用于ADDI/BEQ/BNE/JMP)
+    // imm13: {[17:13], [7:0]}符号扩展 (用于ADDI/BEQ/BNE/JMP)
     logic [12:0] imm13_raw;
     assign imm13_raw = {instruction[17:13], instruction[7:0]};
     logic [31:0] imm13_sext;
