@@ -15,8 +15,12 @@ module gpu_decoder (
     output logic        out_is_branch,
     output logic        out_is_jump,
     output logic        out_is_addi,
-    output logic        out_is_mac
+    output logic        out_is_mac,
+    output logic        out_halt
 );
+
+    // HALT detection: instruction == 0x00000001
+    assign out_halt = (instruction == 32'h00000001);
 
     logic [3:0] opcode;
     assign opcode       = instruction[31:28];
@@ -53,7 +57,7 @@ module gpu_decoder (
         case (opcode)
             4'h0: begin // ADD
                 out_alu_op = ALU_ADD;
-                out_we     = 1'b1;
+                out_we     = !out_halt;
             end
             4'h1: begin // SUB
                 out_alu_op = ALU_SUB;

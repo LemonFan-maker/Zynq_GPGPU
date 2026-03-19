@@ -119,6 +119,7 @@ module gpu_soc_wrapper (
     logic [127:0] gpu_dmem_wdata;
     logic [127:0] gpu_dmem_rdata;
     logic [3:0]   gpu_flag_zero;
+    logic         gpu_done;
 
     // IMEM: GPU组合读
     assign gpu_imem_data = imem[gpu_imem_addr[7:0]];
@@ -232,7 +233,7 @@ module gpu_soc_wrapper (
                         if (axi_rd_addr == 16'h0000)
                             axi_rdata_reg <= {31'b0, gpu_start_run};
                         else if (axi_rd_addr == 16'h0004)
-                            axi_rdata_reg <= {31'b0, gpu_start_run};
+                            axi_rdata_reg <= {31'b0, gpu_done};
                         else if (axi_rd_addr >= 16'h0100 && axi_rd_addr <= 16'h04FF)
                             axi_rdata_reg <= imem[(axi_rd_addr - 16'h0100) >> 2];
                         else if (axi_rd_addr >= 16'h1000)
@@ -263,7 +264,9 @@ module gpu_soc_wrapper (
         .out_dmem_wdata  (gpu_dmem_wdata),
         .in_dmem_rdata   (gpu_dmem_rdata),
 
-        .out_flag_zero   (gpu_flag_zero)
+        .out_flag_zero   (gpu_flag_zero),
+
+        .gpu_done        (gpu_done)
     );
 
 endmodule

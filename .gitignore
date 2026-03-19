@@ -45,12 +45,14 @@ GPU_PS/export/
 # Vitis IDE 配置
 _ide/
 .rigel_lopper/
+.vscode
 
 # =========================
 # 二进制 / 构建产物
 # =========================
 
 # 编译输出
+tools/gpuasm
 *.elf
 *.bin
 *.o

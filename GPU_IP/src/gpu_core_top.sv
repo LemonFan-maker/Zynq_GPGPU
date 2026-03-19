@@ -14,7 +14,9 @@ module gpu_core_top (
     output logic [127:0] out_dmem_wdata,
     input  logic [127:0] in_dmem_rdata,
 
-    output logic [3:0]  out_flag_zero
+    output logic [3:0]  out_flag_zero,
+
+    output logic        gpu_done
 );
 
     // PC 寄存器
@@ -34,9 +36,14 @@ module gpu_core_top (
     logic        dec_is_jump;
     logic        dec_is_addi;
     logic        dec_is_mac;
+    logic        dec_halt;
 
     // 分支判断
     logic        branch_taken;
+
+    // HALT 状态
+    logic        halted;
+    assign gpu_done = halted;
 
     // 取指+解码都是组合逻辑，不存在流水线气泡问题
     // PC 跳转后，下一周期自然解码目标地址的指令，无需 flush
@@ -44,13 +51,18 @@ module gpu_core_top (
     // PC 逻辑
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            pc <= 32'h0;
-        end else if (dec_is_jump) begin
-            pc <= {19'b0, dec_imm[12:0]};
-        end else if (dec_is_branch && branch_taken) begin
-            pc <= pc + dec_imm;
-        end else begin
-            pc <= pc + 1'b1;
+            pc     <= 32'h0;
+            halted <= 1'b0;
+        end else if (!halted) begin
+            if (dec_halt) begin
+                halted <= 1'b1;
+            end else if (dec_is_jump) begin
+                pc <= {19'b0, dec_imm[12:0]};
+            end else if (dec_is_branch && branch_taken) begin
+                pc <= pc + dec_imm;
+            end else begin
+                pc <= pc + 1'b1;
+            end
         end
     end
 
@@ -67,7 +79,8 @@ module gpu_core_top (
         .out_is_branch(dec_is_branch),
         .out_is_jump  (dec_is_jump),
         .out_is_addi  (dec_is_addi),
-        .out_is_mac   (dec_is_mac)
+        .out_is_mac   (dec_is_mac),
+        .out_halt     (dec_halt)
     );
 
     gpu_exec_unit #( .NUM_LANES(4) ) u_exec_unit (

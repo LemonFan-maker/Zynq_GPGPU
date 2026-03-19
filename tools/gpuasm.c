@@ -51,7 +51,7 @@ static void label_add(const char *name, int pc) {
 typedef struct {
     const char *mnemonic;
     int         opcode;
-    enum { FMT_R, FMT_R_MAC, FMT_I8, FMT_I13, FMT_BR, FMT_JMP, FMT_NOP } fmt;
+    enum { FMT_R, FMT_R_MAC, FMT_I8, FMT_I13, FMT_BR, FMT_JMP, FMT_NOP, FMT_HALT } fmt;
 } OpEntry;
 
 static const OpEntry optable[] = {
@@ -73,6 +73,7 @@ static const OpEntry optable[] = {
     {"BNE",  0xE, FMT_BR},
     {"JMP",  0xF, FMT_JMP},
     {"NOP",  -1,  FMT_NOP},
+    {"HALT", -1,  FMT_HALT},
     {NULL, 0, 0}
 };
 
@@ -246,6 +247,9 @@ static uint32_t pass2_encode(int pc, const char *original_line, int line_no) {
     switch (op->fmt) {
     case FMT_NOP:
         return 0x00000000;
+
+    case FMT_HALT:
+        return 0x00000001;
 
     case FMT_R:
         /* OP rd, rs1, rs2 */
