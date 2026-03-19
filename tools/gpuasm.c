@@ -85,7 +85,7 @@ static const OpEntry *op_lookup(const char *mnemonic) {
     return NULL;
 }
 
-/* 解析寄存器: r0..r31, 返回编号或 -1 */
+/* 解析寄存器: r0..r31, 返回编号或-1 */
 static int parse_reg(const char *s) {
     if ((s[0] == 'r' || s[0] == 'R') && isdigit(s[1])) {
         int n = atoi(s + 1);

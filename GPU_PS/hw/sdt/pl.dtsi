@@ -13,6 +13,14 @@
 			clock-output-names = "fabric_clk";
 			clocks = <&clkc 15>;
 		};
+		afi0: afi0@f8008000 {
+			status = "okay";
+			compatible = "xlnx,afi-fpga";
+			#address-cells = <1>;
+			reg = <0xF8008000 0x1000>;
+			#size-cells = <0>;
+			xlnx,afi-width = <1>;
+		};
 		gpu_soc_wrapper_v_0: gpu_soc_wrapper_v@40000000 {
 			compatible = "xlnx,gpu-soc-wrapper-v-1.0";
 			status = "okay";
