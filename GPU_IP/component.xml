@@ -228,7 +228,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>2a906f2f</spirit:value>
+            <spirit:value>43926d53</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -244,7 +244,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>2a906f2f</spirit:value>
+            <spirit:value>43926d53</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -631,7 +631,7 @@
       <spirit:file>
         <spirit:name>src/gpu_soc_wrapper.sv</spirit:name>
         <spirit:fileType>systemVerilogSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_97d9815d</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_3252fc18</spirit:userFileType>
         <spirit:userFileType>IMPORTED_FILE</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
@@ -719,14 +719,14 @@
       <xilinx:displayName>gpu_soc_wrapper_v1_0</xilinx:displayName>
       <xilinx:definitionSource>package_project</xilinx:definitionSource>
       <xilinx:vendorURL>https://github.com/LemonFan-maker</xilinx:vendorURL>
-      <xilinx:coreRevision>33</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2026-03-21T08:17:04Z</xilinx:coreCreationDateTime>
+      <xilinx:coreRevision>36</xilinx:coreRevision>
+      <xilinx:coreCreationDateTime>2026-03-21T13:48:23Z</xilinx:coreCreationDateTime>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2025.2</xilinx:xilinxVersion>
       <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="da618e65"/>
       <xilinx:checksum xilinx:scope="memoryMaps" xilinx:value="b0334704"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="7641c578"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="378c861d"/>
       <xilinx:checksum xilinx:scope="ports" xilinx:value="7bebb97c"/>
       <xilinx:checksum xilinx:scope="parameters" xilinx:value="cf7717c9"/>
     </xilinx:packagingInfo>
