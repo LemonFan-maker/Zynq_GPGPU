@@ -51,7 +51,7 @@ static void label_add(const char *name, int pc) {
 typedef struct {
     const char *mnemonic;
     int         opcode;
-    enum { FMT_R, FMT_R_MAC, FMT_R2_MAC_ACC, FMT_R2_MUL_OVR, FMT_ACC_NEXT, FMT_I8, FMT_I13, FMT_BR, FMT_JMP, FMT_NOP, FMT_HALT } fmt;
+    enum { FMT_R, FMT_R_MAC, FMT_R2_MAC_ACC, FMT_R2_MAC_ACC_NXT, FMT_R2_MUL_OVR, FMT_ACC_NEXT, FMT_I8, FMT_I13, FMT_BR, FMT_JMP, FMT_NOP, FMT_HALT } fmt;
 } OpEntry;
 
 static const OpEntry optable[] = {
@@ -60,6 +60,7 @@ static const OpEntry optable[] = {
     {"MUL",  0x2, FMT_R},
     {"MAC",     0x2, FMT_R_MAC},
     {"MAC_ACC", 0x2, FMT_R2_MAC_ACC},
+    {"MAC_ACC_NXT", 0x2, FMT_R2_MAC_ACC_NXT},
     {"MUL_OVR", 0x2, FMT_R2_MUL_OVR},
     {"MAC_Z",   0x2, FMT_R2_MUL_OVR},
     {"ACC_NEXT",0x2, FMT_ACC_NEXT},
@@ -298,6 +299,19 @@ static uint32_t pass2_encode(int pc, const char *original_line, int line_no) {
             exit(1);
         }
         return encode_r(op->opcode, 0, rs1, rs2) | 0x02;
+
+    case FMT_R2_MAC_ACC_NXT:
+        if (ntok - ti < 3) {
+            fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 需要2个寄存器操作数\n", line_no, mnem);
+            exit(1);
+        }
+        rs1 = parse_reg(tokens[ti + 1]);
+        rs2 = parse_reg(tokens[ti + 2]);
+        if (rs1 < 0 || rs2 < 0) {
+            fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 中的寄存器无效\n", line_no, mnem);
+            exit(1);
+        }
+        return encode_r(op->opcode, 0, rs1, rs2) | 0x0A;
 
     case FMT_R2_MUL_OVR:
         /* MUL_OVR/MAC_Z rs1, rs2 — no rd

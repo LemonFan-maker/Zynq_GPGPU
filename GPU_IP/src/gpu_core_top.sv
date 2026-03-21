@@ -43,6 +43,7 @@ module gpu_core_top (
     logic        dec_is_addi;
     logic        dec_is_mac;
     logic        dec_is_mac_acc;
+    logic        dec_is_mac_acc_nxt;
     logic        dec_is_mul_ovr;
     logic        dec_is_acc_next;
     logic        dec_halt;
@@ -93,6 +94,7 @@ module gpu_core_top (
         .out_is_addi  (dec_is_addi),
         .out_is_mac   (dec_is_mac),
         .out_is_mac_acc(dec_is_mac_acc),
+        .out_is_mac_acc_nxt(dec_is_mac_acc_nxt),
         .out_is_mul_ovr(dec_is_mul_ovr),
         .out_is_acc_next(dec_is_acc_next),
         .out_halt     (dec_halt)
@@ -112,6 +114,7 @@ module gpu_core_top (
         .in_is_addi     (dec_is_addi),
         .in_is_mac      (dec_is_mac),
         .in_is_mac_acc  (dec_is_mac_acc),
+        .in_is_mac_acc_nxt(dec_is_mac_acc_nxt),
         .in_is_mul_ovr  (dec_is_mul_ovr),
         .in_is_acc_next (dec_is_acc_next),
         .in_flush       (1'b0),

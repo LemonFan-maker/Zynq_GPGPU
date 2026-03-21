@@ -58,9 +58,7 @@ j_loop:
     MAC_ACC r6,  r7         ; acc_buf[ptr] += A[i][6]*B[6][j]
     LDR  r22, [r5 + 56]    ; B[7][j]
     ADDI r3,  r3,  1       ; j++
-    MAC_ACC r21, r22        ; acc_buf[ptr] += A[i][7]*B[7][j]
-
-    ACC_NEXT                ; acc_ptr++ (move to next output element)
+    MAC_ACC_NXT r21, r22    ; acc_buf[ptr] += A[i][7]*B[7][j], then acc_ptr++
     BNE  r3,  r9, j_loop   ; if j < 8, next column
 
     ADDI r2, r2, 1          ; i++

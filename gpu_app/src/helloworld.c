@@ -475,6 +475,7 @@ static void bench_matmul_tiled_run(void)
     const uint32_t patch_pc_mul0 = 13;  
     const uint32_t instr_mac_acc = bench_matmul_pp[patch_pc_mul0];
     const uint32_t instr_mul_ovr = bench_matmul_pp_ovr[patch_pc_mul0];
+    const uint32_t base_by_tk[2] = {PING_BASE, PONG_BASE};
 
     uint64_t t_pipe_start = timer_now();
     uint64_t total_gpu_ticks = 0;
@@ -487,35 +488,35 @@ static void bench_matmul_tiled_run(void)
             vdma_to_dmem(src_A, PING_BASE,      8, 8, stride);
             vdma_to_dmem(src_B, PING_BASE + 64, 8, 8, stride);
 
-            for (int tk = 0; tk < 2; tk++) {
-                int is_ping = (tk % 2 == 0);
-                uint32_t cur_base  = is_ping ? PING_BASE : PONG_BASE;
-                uint32_t next_base = is_ping ? PONG_BASE : PING_BASE;
+            for (int l = 0; l < NUM_LANES; l++)
+                DMEM_WR(PARAM_ENTRY, l, base_by_tk[0]);
+            gpu_patch_imem_word(patch_pc_mul0, instr_mul_ovr);
 
-                
-                for (int l = 0; l < NUM_LANES; l++)
-                    DMEM_WR(PARAM_ENTRY, l, cur_base);
+            uint64_t t0 = timer_now();
+            Xil_Out32(GPU_CTRL, 1);
 
-                gpu_patch_imem_word(patch_pc_mul0, (tk == 0) ? instr_mul_ovr : instr_mac_acc);
-
-                
-                uint64_t t0 = timer_now();
-                Xil_Out32(GPU_CTRL, 1);
-
-                
-                if (tk < 1) {
-                    uint32_t src_A_next = DDR_BUF_A + (ti * 8 * 16 + 1 * 8) * 32;
-                    uint32_t src_B_next = DDR_BUF_B + (1 * 8 * 16 + tj * 8) * 32;
-                    vdma_to_dmem(src_A_next, next_base,      8, 8, stride);
-                    vdma_to_dmem(src_B_next, next_base + 64, 8, 8, stride);
-                }
-
-                
-                while (!(Xil_In32(GPU_STATUS) & 1));
-                uint64_t t1 = timer_now();
-                Xil_Out32(GPU_CTRL, 0);
-                total_gpu_ticks += (t1 - t0);
+            {
+                uint32_t src_A_next = DDR_BUF_A + (ti * 8 * 16 + 1 * 8) * 32;
+                uint32_t src_B_next = DDR_BUF_B + (1 * 8 * 16 + tj * 8) * 32;
+                vdma_to_dmem(src_A_next, base_by_tk[1],      8, 8, stride);
+                vdma_to_dmem(src_B_next, base_by_tk[1] + 64, 8, 8, stride);
             }
+
+            while (!(Xil_In32(GPU_STATUS) & 1));
+            uint64_t t1 = timer_now();
+            Xil_Out32(GPU_CTRL, 0);
+            total_gpu_ticks += (t1 - t0);
+
+            for (int l = 0; l < NUM_LANES; l++)
+                DMEM_WR(PARAM_ENTRY, l, base_by_tk[1]);
+            gpu_patch_imem_word(patch_pc_mul0, instr_mac_acc);
+
+            t0 = timer_now();
+            Xil_Out32(GPU_CTRL, 1);
+            while (!(Xil_In32(GPU_STATUS) & 1));
+            t1 = timer_now();
+            Xil_Out32(GPU_CTRL, 0);
+            total_gpu_ticks += (t1 - t0);
 
             
             uint32_t c_dst = DDR_C_OUT + (ti * 8 * 16 + tj * 8) * 32;
@@ -623,7 +624,7 @@ static void print_summary(void)
     xil_printf("  Pipeline:   Fetch(comb) -> Decode(comb) -> Execute(1-clk) + Forwarding\n\r");
     xil_printf("  IMEM:       1024 x 32-bit instructions\n\r");
     xil_printf("  DMEM:       4096 entries x 8 lanes x 32-bit = 128 KB\n\r");
-    xil_printf("  ISA:        17 instructions (ALU/MAC/LDR/STR/Branch/Jump + MUL_OVR)\n\r");
+    xil_printf("  ISA:        18 instructions (ALU/MAC/LDR/STR/Branch/Jump + MUL_OVR + MAC_ACC_NXT)\n\r");
     xil_printf("  DMA:        AXI4 Master via S_AXI_HP0, burst DDR<->DMEM\n\r");
     xil_printf("  Peak:       50M instr/s x 8 lanes = 400 MOPS (theoretical)\n\r");
     xil_printf("  Peak MAC:   50M MAC/s x 8 lanes = 400 MMAC/s (theoretical)\n\r");

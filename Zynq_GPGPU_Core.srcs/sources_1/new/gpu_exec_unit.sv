@@ -17,6 +17,7 @@ module gpu_exec_unit #(
     input  logic        in_is_addi,
     input  logic        in_is_mac,
     input  logic        in_is_mac_acc,
+    input  logic        in_is_mac_acc_nxt,
     input  logic        in_is_mul_ovr,
     input  logic        in_is_acc_next,
     input  logic        in_flush,
@@ -41,16 +42,18 @@ module gpu_exec_unit #(
     logic       wb_sel_pipe;
     logic       mac_pipe;
     logic       mac_acc_pipe;
+    logic       mac_acc_nxt_pipe;
     logic       mul_ovr_pipe;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0; mac_pipe <= 0; mac_acc_pipe <= 0; mul_ovr_pipe <= 0;
+            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0; mac_pipe <= 0; mac_acc_pipe <= 0; mac_acc_nxt_pipe <= 0; mul_ovr_pipe <= 0;
         end else if (in_flush) begin
-            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0; mac_pipe <= 0; mac_acc_pipe <= 0; mul_ovr_pipe <= 0;
+            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0; mac_pipe <= 0; mac_acc_pipe <= 0; mac_acc_nxt_pipe <= 0; mul_ovr_pipe <= 0;
         end else begin
             we_pipe <= in_we; rd_addr_pipe <= in_rd_addr; wb_sel_pipe <= in_mem_re; mac_pipe <= in_is_mac;
             mac_acc_pipe <= in_is_mac_acc;
+            mac_acc_nxt_pipe <= in_is_mac_acc_nxt;
             mul_ovr_pipe <= in_is_mul_ovr;
         end
     end
@@ -62,7 +65,7 @@ module gpu_exec_unit #(
             acc_ptr <= 6'd0;
         end else if (in_acc_clr) begin
             acc_ptr <= 6'd0;
-        end else if (in_is_acc_next) begin
+        end else if (in_is_acc_next || in_is_mac_acc_nxt) begin
             acc_ptr <= acc_ptr + 6'd1;
         end
     end
@@ -161,7 +164,7 @@ module gpu_exec_unit #(
                     acc_buf[acc_clr_addr] <= 32'h0;
                 end else if (mul_ovr_pipe && exec_mask[i]) begin
                     acc_buf[acc_ptr_pipe] <= lane_alu_res_pipe[i];
-                end else if (mac_acc_pipe && exec_mask[i]) begin
+                end else if ((mac_acc_pipe || mac_acc_nxt_pipe) && exec_mask[i]) begin
                     acc_buf[acc_ptr_pipe] <= acc_buf[acc_ptr_pipe] + lane_alu_res_pipe[i];
                 end
             end

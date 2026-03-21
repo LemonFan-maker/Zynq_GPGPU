@@ -36,11 +36,10 @@ uint32_t bench_matmul_pp_ovr[] = {
     0x2000E602,  // [31] MAC_ACC r6,  r7         ; acc_buf[ptr] += A[i][6]*B[6][j]
     0x8B000538,  // [32] LDR  r22, [r5 + 56]    ; B[7][j]
     0xC1800301,  // [33] ADDI r3,  r3,  1       ; j++
-    0x2002D502,  // [34] MAC_ACC r21, r22        ; acc_buf[ptr] += A[i][7]*B[7][j]
-    0x20000003,  // [35] ACC_NEXT                ; acc_ptr++ (move to next output element)
-    0xE483E3E5,  // [36] BNE  r3,  r9, j_loop   ; if j < 8, next column
-    0xC1000201,  // [37] ADDI r2, r2, 1          ; i++
-    0xE483E2E0,  // [38] BNE  r2, r9, i_loop     ; if i < 8, next row
-    0x00000001,  // [39] HALT
+    0x2002D50A,  // [34] MAC_ACC_NXT r21, r22    ; acc_buf[ptr] += A[i][7]*B[7][j], then acc_ptr++
+    0xE483E3E6,  // [35] BNE  r3,  r9, j_loop   ; if j < 8, next column
+    0xC1000201,  // [36] ADDI r2, r2, 1          ; i++
+    0xE483E2E1,  // [37] BNE  r2, r9, i_loop     ; if i < 8, next row
+    0x00000001,  // [38] HALT
 };
-#define bench_matmul_pp_ovr_LEN 40
+#define bench_matmul_pp_ovr_LEN 39

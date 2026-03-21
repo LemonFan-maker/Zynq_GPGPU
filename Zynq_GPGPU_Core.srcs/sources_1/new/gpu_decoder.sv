@@ -17,6 +17,7 @@ module gpu_decoder (
     output logic        out_is_addi,
     output logic        out_is_mac,
     output logic        out_is_mac_acc,
+    output logic        out_is_mac_acc_nxt,
     output logic        out_is_mul_ovr,
     output logic        out_is_acc_next,
     output logic        out_halt
@@ -56,6 +57,7 @@ module gpu_decoder (
         out_is_addi   = 1'b0;
         out_is_mac    = 1'b0;
         out_is_mac_acc = 1'b0;
+        out_is_mac_acc_nxt = 1'b0;
         out_is_mul_ovr = 1'b0;
         out_is_acc_next = 1'b0;
         out_alu_op    = ALU_ADD;
@@ -93,6 +95,10 @@ module gpu_decoder (
                         // MUL_OVR/MAC_Z: low bits fixed to 2'b10 for accumulator operand form
                         if (instruction[1:0] == 2'b10)
                             out_is_mul_ovr = 1'b1;
+                    end
+                    2'b10: begin
+                        if (instruction[1:0] == 2'b10)
+                            out_is_mac_acc_nxt = 1'b1;
                     end
                 endcase
             end
