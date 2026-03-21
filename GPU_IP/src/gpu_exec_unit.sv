@@ -16,13 +16,20 @@ module gpu_exec_unit #(
     input  logic        in_mem_we,
     input  logic        in_is_addi,
     input  logic        in_is_mac,
+    input  logic        in_is_mac_acc,
+    input  logic        in_is_mul_ovr,
+    input  logic        in_is_acc_next,
     input  logic        in_flush,
+    input  logic        in_acc_clr,
 
     output logic        out_dmem_re,
     output logic [NUM_LANES-1:0] out_dmem_we,
     output logic [31:0] out_dmem_addr,
     output logic [NUM_LANES*32-1:0] out_dmem_wdata,
     input  logic [NUM_LANES*32-1:0] in_dmem_rdata,
+
+    input  logic [5:0]  in_acc_rd_addr,
+    output logic [NUM_LANES*32-1:0] out_acc_rd_data,
 
     output logic [NUM_LANES-1:0] out_flag_zero,
     output logic        out_branch_taken
@@ -33,14 +40,30 @@ module gpu_exec_unit #(
     logic [4:0] rd_addr_pipe;
     logic       wb_sel_pipe;
     logic       mac_pipe;
+    logic       mac_acc_pipe;
+    logic       mul_ovr_pipe;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0; mac_pipe <= 0;
+            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0; mac_pipe <= 0; mac_acc_pipe <= 0; mul_ovr_pipe <= 0;
         end else if (in_flush) begin
-            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0; mac_pipe <= 0;
+            we_pipe <= 0; rd_addr_pipe <= 0; wb_sel_pipe <= 0; mac_pipe <= 0; mac_acc_pipe <= 0; mul_ovr_pipe <= 0;
         end else begin
             we_pipe <= in_we; rd_addr_pipe <= in_rd_addr; wb_sel_pipe <= in_mem_re; mac_pipe <= in_is_mac;
+            mac_acc_pipe <= in_is_mac_acc;
+            mul_ovr_pipe <= in_is_mul_ovr;
+        end
+    end
+
+    logic [5:0] acc_ptr;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            acc_ptr <= 6'd0;
+        end else if (in_acc_clr) begin
+            acc_ptr <= 6'd0;
+        end else if (in_is_acc_next) begin
+            acc_ptr <= acc_ptr + 6'd1;
         end
     end
 
@@ -58,17 +81,17 @@ module gpu_exec_unit #(
     // Lane 数据线
     logic [31:0] lane_rdata1 [NUM_LANES];
     logic [31:0] lane_rdata2 [NUM_LANES];
-    logic [31:0] lane_rdata3 [NUM_LANES]; // rd 旧值 (MAC 累加器)
+    logic [31:0] lane_rdata3 [NUM_LANES];
     logic [31:0] lane_alu_res [NUM_LANES];
-    logic [31:0] lane_alu_res_pipe [NUM_LANES]; // ALU 结果打一拍，和 we_pipe 对齐
+    logic [31:0] lane_alu_res_pipe [NUM_LANES];
     logic [31:0] lane_lsu_res [NUM_LANES];
 
     logic [NUM_LANES*32-1:0] lsu_wdata_packed;
     logic [NUM_LANES*32-1:0] lsu_rdata_packed;
 
-    // ALU 结果 pipeline 寄存器: 让 ALU 结果和写回控制信号 (we_pipe) 对齐
-    // MAC: 同时 pipeline rd 的旧值用于累加
     logic [31:0] lane_rd_old_pipe [NUM_LANES];
+
+    logic [5:0] acc_ptr_pipe;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -76,20 +99,38 @@ module gpu_exec_unit #(
                 lane_alu_res_pipe[j] <= 32'h0;
                 lane_rd_old_pipe[j]  <= 32'h0;
             end
+            acc_ptr_pipe <= 6'd0;
         end else begin
             for (int j = 0; j < NUM_LANES; j++) begin
                 lane_alu_res_pipe[j] <= lane_alu_res[j];
                 lane_rd_old_pipe[j]  <= lane_rdata3[j];
             end
+            acc_ptr_pipe <= acc_ptr;
         end
     end
 
-    // 分支判断：用 Lane0 的寄存器值做比较（组合逻辑，同周期可用）
     assign out_branch_taken = (in_alu_op == OP_BEQ) ? (lane_rdata1[0] == lane_rdata2[0]) :
                               (in_alu_op == OP_BNE) ? (lane_rdata1[0] != lane_rdata2[0]) :
                               1'b0;
 
-    // ADDI: operand_b 用 imm 替代 rs2
+    logic        acc_clearing;
+    logic [5:0]  acc_clr_addr;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            acc_clearing <= 1'b0;
+            acc_clr_addr <= 6'd0;
+        end else if (in_acc_clr) begin
+            acc_clearing <= 1'b1;
+            acc_clr_addr <= 6'd0;
+        end else if (acc_clearing) begin
+            if (acc_clr_addr == 6'd63)
+                acc_clearing <= 1'b0;
+            else
+                acc_clr_addr <= acc_clr_addr + 6'd1;
+        end
+    end
+
     logic [31:0] alu_opb [NUM_LANES];
 
     genvar i;
@@ -109,6 +150,20 @@ module gpu_exec_unit #(
 
             logic [31:0] final_wb;
             assign final_wb = (wb_sel_pipe) ? lane_lsu_res[i] : alu_or_mac;
+
+            (* ram_style = "distributed" *) logic [31:0] acc_buf [0:63];
+
+            assign out_acc_rd_data[i*32 +: 32] = acc_buf[in_acc_rd_addr];
+
+            always_ff @(posedge clk) begin
+                if (acc_clearing) begin
+                    acc_buf[acc_clr_addr] <= 32'h0;
+                end else if (mul_ovr_pipe && exec_mask[i]) begin
+                    acc_buf[acc_ptr_pipe] <= lane_alu_res_pipe[i];
+                end else if (mac_acc_pipe && exec_mask[i]) begin
+                    acc_buf[acc_ptr_pipe] <= acc_buf[acc_ptr_pipe] + lane_alu_res_pipe[i];
+                end
+            end
 
             gpu_regfile u_rf (
                 .clk(clk), .we(we_pipe & exec_mask[i]),

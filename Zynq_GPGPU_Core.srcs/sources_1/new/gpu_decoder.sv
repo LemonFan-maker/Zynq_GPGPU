@@ -16,6 +16,9 @@ module gpu_decoder (
     output logic        out_is_jump,
     output logic        out_is_addi,
     output logic        out_is_mac,
+    output logic        out_is_mac_acc,
+    output logic        out_is_mul_ovr,
+    output logic        out_is_acc_next,
     output logic        out_halt
 );
 
@@ -27,15 +30,15 @@ module gpu_decoder (
     assign out_rd_addr  = instruction[27:23];
     assign out_rs1_addr = instruction[12:8];
 
-    // rs2: 普通指令用[17:13]，BEQ/BNE借用rd字段[27:23]做比较源
+    // rs2: 普通指令用 [17:13]，BEQ/BNE 借用 rd 字段 [27:23] 做比较源
     assign out_rs2_addr = (opcode == 4'hD || opcode == 4'hE) ?
                           instruction[27:23] : instruction[17:13];
 
-    // imm8: 8-bit符号扩展 (用于LDR/STR)
+    // imm8: 8-bit 符号扩展 (用于 LDR/STR)
     logic [31:0] imm8_sext;
     assign imm8_sext = {{24{instruction[7]}}, instruction[7:0]};
 
-    // imm13: {[17:13], [7:0]}符号扩展 (用于ADDI/BEQ/BNE/JMP)
+    // imm13: {[17:13], [7:0]} 符号扩展 (用于 ADDI/BEQ/BNE/JMP)
     logic [12:0] imm13_raw;
     assign imm13_raw = {instruction[17:13], instruction[7:0]};
     logic [31:0] imm13_sext;
@@ -52,6 +55,9 @@ module gpu_decoder (
         out_is_jump   = 1'b0;
         out_is_addi   = 1'b0;
         out_is_mac    = 1'b0;
+        out_is_mac_acc = 1'b0;
+        out_is_mul_ovr = 1'b0;
+        out_is_acc_next = 1'b0;
         out_alu_op    = ALU_ADD;
 
         case (opcode)
@@ -63,10 +69,32 @@ module gpu_decoder (
                 out_alu_op = ALU_SUB;
                 out_we     = 1'b1;
             end
-            4'h2: begin // MUL (imm8[0]=0) or MAC (imm8[0]=1)
+            4'h2: begin // MUL/MAC/MAC_ACC/ACC_NEXT + MUL_OVR (submode in imm8[3:2])
                 out_alu_op = ALU_MUL;
-                out_we     = 1'b1;
-                out_is_mac = instruction[0];
+                case (instruction[3:2])
+                    2'b00: begin
+                        case (instruction[1:0])
+                            2'b00: begin // MUL
+                                out_we = 1'b1;
+                            end
+                            2'b01: begin // MAC
+                                out_we     = 1'b1;
+                                out_is_mac = 1'b1;
+                            end
+                            2'b10: begin // MAC_ACC
+                                out_is_mac_acc = 1'b1;
+                            end
+                            2'b11: begin // ACC_NEXT
+                                out_is_acc_next = 1'b1;
+                            end
+                        endcase
+                    end
+                    2'b01: begin
+                        // MUL_OVR/MAC_Z: low bits fixed to 2'b10 for accumulator operand form
+                        if (instruction[1:0] == 2'b10)
+                            out_is_mul_ovr = 1'b1;
+                    end
+                endcase
             end
             4'h3: begin // AND
                 out_alu_op = ALU_AND;

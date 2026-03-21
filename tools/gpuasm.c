@@ -51,14 +51,18 @@ static void label_add(const char *name, int pc) {
 typedef struct {
     const char *mnemonic;
     int         opcode;
-    enum { FMT_R, FMT_R_MAC, FMT_I8, FMT_I13, FMT_BR, FMT_JMP, FMT_NOP, FMT_HALT } fmt;
+    enum { FMT_R, FMT_R_MAC, FMT_R2_MAC_ACC, FMT_R2_MUL_OVR, FMT_ACC_NEXT, FMT_I8, FMT_I13, FMT_BR, FMT_JMP, FMT_NOP, FMT_HALT } fmt;
 } OpEntry;
 
 static const OpEntry optable[] = {
     {"ADD",  0x0, FMT_R},
     {"SUB",  0x1, FMT_R},
     {"MUL",  0x2, FMT_R},
-    {"MAC",  0x2, FMT_R_MAC},
+    {"MAC",     0x2, FMT_R_MAC},
+    {"MAC_ACC", 0x2, FMT_R2_MAC_ACC},
+    {"MUL_OVR", 0x2, FMT_R2_MUL_OVR},
+    {"MAC_Z",   0x2, FMT_R2_MUL_OVR},
+    {"ACC_NEXT",0x2, FMT_ACC_NEXT},
     {"AND",  0x3, FMT_R},
     {"OR",   0x4, FMT_R},
     {"XOR",  0x5, FMT_R},
@@ -267,7 +271,7 @@ static uint32_t pass2_encode(int pc, const char *original_line, int line_no) {
         return encode_r(op->opcode, rd, rs1, rs2);
 
     case FMT_R_MAC:
-        /* MAC rd, rs1, rs2 — same as MUL but imm8[0]=1 */
+        /* MAC rd, rs1, rs2 — same as MUL but imm8[1:0]=01 */
         if (ntok - ti < 4) {
             fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 需要3个寄存器操作数\n", line_no, mnem);
             exit(1);
@@ -280,6 +284,40 @@ static uint32_t pass2_encode(int pc, const char *original_line, int line_no) {
             exit(1);
         }
         return encode_r(op->opcode, rd, rs1, rs2) | 0x01;
+
+    case FMT_R2_MAC_ACC:
+        /* MAC_ACC rs1, rs2 — no rd, imm8[1:0]=10 */
+        if (ntok - ti < 3) {
+            fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 需要2个寄存器操作数\n", line_no, mnem);
+            exit(1);
+        }
+        rs1 = parse_reg(tokens[ti + 1]);
+        rs2 = parse_reg(tokens[ti + 2]);
+        if (rs1 < 0 || rs2 < 0) {
+            fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 中的寄存器无效\n", line_no, mnem);
+            exit(1);
+        }
+        return encode_r(op->opcode, 0, rs1, rs2) | 0x02;
+
+    case FMT_R2_MUL_OVR:
+        /* MUL_OVR/MAC_Z rs1, rs2 — no rd
+         * opcode=0x2, imm8[3:2]=01 (submode), imm8[1:0]=10 (accumulator operand form)
+         */
+        if (ntok - ti < 3) {
+            fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 需要2个寄存器操作数\n", line_no, mnem);
+            exit(1);
+        }
+        rs1 = parse_reg(tokens[ti + 1]);
+        rs2 = parse_reg(tokens[ti + 2]);
+        if (rs1 < 0 || rs2 < 0) {
+            fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 中的寄存器无效\n", line_no, mnem);
+            exit(1);
+        }
+        return encode_r(op->opcode, 0, rs1, rs2) | 0x06;
+
+    case FMT_ACC_NEXT:
+        /* ACC_NEXT — no operands, imm8[1:0]=11 */
+        return encode_r(op->opcode, 0, 0, 0) | 0x03;
 
     case FMT_I8:
         /* LDR rd, [rs1 + imm8]  or  STR rs2, [rs1 + imm8] */

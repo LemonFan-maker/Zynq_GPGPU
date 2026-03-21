@@ -1,6 +1,5 @@
 `timescale 1ns / 1ps
 
-// Vivado 可推断的 True Dual-Port BRAM 模板
 // Port A: GPU    Port B: AXI
 module gpu_tdp_bram #(
     parameter ADDR_WIDTH = 11,

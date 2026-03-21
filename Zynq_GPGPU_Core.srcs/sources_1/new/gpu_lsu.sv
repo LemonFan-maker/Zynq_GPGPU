@@ -9,10 +9,9 @@ module gpu_lsu #(
 
     input  logic        in_mem_re,
     input  logic        in_mem_we,
-    input  logic [31:0] in_base_addr, // 以Lane 0的基地址作为整个Warp的对齐寻址基准
+    input  logic [31:0] in_base_addr,
     input  logic [31:0] in_offset,
 
-    // 收集所有Lane要写的数据
     input  logic [NUM_LANES*32-1:0] in_wdata_vector,
 
     output logic        out_dmem_re,
@@ -25,7 +24,6 @@ module gpu_lsu #(
     output logic [NUM_LANES*32-1:0] out_wb_data_vector
 );
 
-    // 所有Lane共享同一个基础内存块地址
     assign out_dmem_addr = in_base_addr + in_offset;
 
     // 读写控制及128-bit宽带数据透传

@@ -11,11 +11,14 @@ module gpu_alu_lane (
     output logic        flag_zero
 );
 
+    (* use_dsp = "yes" *) logic [31:0] mul_result;
+    assign mul_result = operand_a * operand_b;
+
     always_comb begin
         case (alu_op)
             ALU_ADD: result = operand_a + operand_b;
             ALU_SUB: result = operand_a - operand_b;
-            ALU_MUL: result = operand_a * operand_b;
+            ALU_MUL: result = mul_result;
             ALU_AND: result = operand_a & operand_b;
             ALU_OR:  result = operand_a | operand_b;
             ALU_XOR: result = operand_a ^ operand_b;

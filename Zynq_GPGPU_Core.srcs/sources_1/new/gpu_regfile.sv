@@ -19,9 +19,12 @@ module gpu_regfile (
 
     logic [31:0] regs [31:0];
 
-    assign rdata1 = (raddr1 == 5'b0) ? 32'h0 : regs[raddr1];
-    assign rdata2 = (raddr2 == 5'b0) ? 32'h0 : regs[raddr2];
-    assign rdata3 = (raddr3 == 5'b0) ? 32'h0 : regs[raddr3];
+    assign rdata1 = (raddr1 == 5'b0) ? 32'h0 :
+                    (we && waddr != 5'b0 && waddr == raddr1) ? wdata : regs[raddr1];
+    assign rdata2 = (raddr2 == 5'b0) ? 32'h0 :
+                    (we && waddr != 5'b0 && waddr == raddr2) ? wdata : regs[raddr2];
+    assign rdata3 = (raddr3 == 5'b0) ? 32'h0 :
+                    (we && waddr != 5'b0 && waddr == raddr3) ? wdata : regs[raddr3];
 
     always_ff @(posedge clk) begin
         if (we && (waddr != 5'b0)) begin
@@ -29,7 +32,6 @@ module gpu_regfile (
         end
     end
 
-    // 仿真时初始化所有寄存器为0，防止出现未知态
     initial begin
         for (int i = 0; i < 32; i++) begin
             regs[i] = 32'h0;
