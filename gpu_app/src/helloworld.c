@@ -618,15 +618,15 @@ static void print_summary(void)
     xil_printf("========================================\n\r");
     xil_printf("  SoC:        Zynq-7020 (xc7z020clg400-1)\n\r");
     xil_printf("  ARM:        Cortex-A9 @ 667 MHz\n\r");
-    xil_printf("  GPU Clock:  100 MHz (FCLK_CLK0)\n\r");
+    xil_printf("  GPU Clock:  50 MHz (FCLK_CLK0)\n\r");
     xil_printf("  SIMD Lanes: 8 x 32-bit integer\n\r");
     xil_printf("  Pipeline:   Fetch(comb) -> Decode(comb) -> Execute(1-clk) + Forwarding\n\r");
     xil_printf("  IMEM:       1024 x 32-bit instructions\n\r");
     xil_printf("  DMEM:       4096 entries x 8 lanes x 32-bit = 128 KB\n\r");
     xil_printf("  ISA:        17 instructions (ALU/MAC/LDR/STR/Branch/Jump + MUL_OVR)\n\r");
     xil_printf("  DMA:        AXI4 Master via S_AXI_HP0, burst DDR<->DMEM\n\r");
-    xil_printf("  Peak:       100M instr/s x 8 lanes = 800 MOPS (theoretical)\n\r");
-    xil_printf("  Peak MAC:   100M MAC/s x 8 lanes = 800 MMAC/s (theoretical)\n\r");
+    xil_printf("  Peak:       50M instr/s x 8 lanes = 400 MOPS (theoretical)\n\r");
+    xil_printf("  Peak MAC:   50M MAC/s x 8 lanes = 400 MMAC/s (theoretical)\n\r");
 }
 
 int main()
