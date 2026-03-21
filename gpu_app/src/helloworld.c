@@ -741,7 +741,7 @@ static void print_summary(void)
     xil_printf("\n\r========================================\n\r");
     xil_printf("  System Specification\n\r");
     xil_printf("========================================\n\r");
-    xil_printf("  SoC:        Zynq-7020 (xc7z020clg400-1)\n\r");
+    xil_printf("  SoC:        Zynq-7020 (xc7z020clg400-2)\n\r");
     xil_printf("  ARM:        Cortex-A9 @ 667 MHz\n\r");
     xil_printf("  GPU Clock:  50 MHz (FCLK_CLK0)\n\r");
     xil_printf("  SIMD Lanes: 8 x 32-bit integer\n\r");
