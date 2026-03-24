@@ -7,6 +7,7 @@ module tb_gpu_alu_lane();
     logic         tb_clk;
     logic         tb_rst_n;
     alu_op_t      tb_alu_op;
+    logic         tb_is_dp4a;
     logic [31:0]  tb_operand_a;
     logic [31:0]  tb_operand_b;
     logic [31:0]  tb_result;
@@ -16,6 +17,7 @@ module tb_gpu_alu_lane();
         .clk       (tb_clk),
         .rst_n     (tb_rst_n),
         .alu_op    (tb_alu_op),
+        .in_is_dp4a(tb_is_dp4a),
         .operand_a (tb_operand_a),
         .operand_b (tb_operand_b),
         .result    (tb_result),
@@ -32,6 +34,7 @@ module tb_gpu_alu_lane();
         // 系统复位
         tb_rst_n = 0;
         tb_alu_op = ALU_ADD;
+        tb_is_dp4a = 1'b0;
         tb_operand_a = 32'd0;
         tb_operand_b = 32'd0;
         

@@ -18,6 +18,7 @@ module gpu_decoder (
     output logic        out_is_mac,
     output logic        out_is_mac_acc,
     output logic        out_is_mac_acc_nxt,
+    output logic        out_is_dp4a,
     output logic        out_is_mul_ovr,
     output logic        out_is_acc_next,
     output logic        out_halt
@@ -58,6 +59,7 @@ module gpu_decoder (
         out_is_mac    = 1'b0;
         out_is_mac_acc = 1'b0;
         out_is_mac_acc_nxt = 1'b0;
+        out_is_dp4a = 1'b0;
         out_is_mul_ovr = 1'b0;
         out_is_acc_next = 1'b0;
         out_alu_op    = ALU_ADD;
@@ -73,34 +75,45 @@ module gpu_decoder (
             end
             4'h2: begin // MUL/MAC/MAC_ACC/ACC_NEXT + MUL_OVR (submode in imm8[3:2])
                 out_alu_op = ALU_MUL;
-                case (instruction[3:2])
-                    2'b00: begin
-                        case (instruction[1:0])
-                            2'b00: begin // MUL
-                                out_we = 1'b1;
-                            end
-                            2'b01: begin // MAC
-                                out_we     = 1'b1;
-                                out_is_mac = 1'b1;
-                            end
-                            2'b10: begin // MAC_ACC
-                                out_is_mac_acc = 1'b1;
-                            end
-                            2'b11: begin // ACC_NEXT
-                                out_is_acc_next = 1'b1;
-                            end
-                        endcase
-                    end
-                    2'b01: begin
-                        // MUL_OVR/MAC_Z: low bits fixed to 2'b10 for accumulator operand form
-                        if (instruction[1:0] == 2'b10)
-                            out_is_mul_ovr = 1'b1;
-                    end
-                    2'b10: begin
-                        if (instruction[1:0] == 2'b10)
-                            out_is_mac_acc_nxt = 1'b1;
-                    end
-                endcase
+                if (instruction[7:6] == 2'b10) begin
+                    // low[1:0]=00 -> DP4A (rd = dot4(rs1,rs2))
+                    // low[1:0]=10 -> DP4A_ACC (acc += dot4(rs1,rs2))
+                    out_is_dp4a = 1'b1;
+                    case (instruction[1:0])
+                        2'b00: out_we = 1'b1;
+                        2'b10: out_is_mac_acc = 1'b1;
+                        default: begin
+                        end
+                    endcase
+                end else begin
+                    case (instruction[3:2])
+                        2'b00: begin
+                            case (instruction[1:0])
+                                2'b00: begin // MUL
+                                    out_we = 1'b1;
+                                end
+                                2'b01: begin // MAC
+                                    out_we     = 1'b1;
+                                    out_is_mac = 1'b1;
+                                end
+                                2'b10: begin // MAC_ACC
+                                    out_is_mac_acc = 1'b1;
+                                end
+                                2'b11: begin // ACC_NEXT
+                                    out_is_acc_next = 1'b1;
+                                end
+                            endcase
+                        end
+                        2'b01: begin
+                            if (instruction[1:0] == 2'b10)
+                                out_is_mul_ovr = 1'b1;
+                        end
+                        2'b10: begin
+                            if (instruction[1:0] == 2'b10)
+                                out_is_mac_acc_nxt = 1'b1;
+                        end
+                    endcase
+                end
             end
             4'h3: begin // AND
                 out_alu_op = ALU_AND;

@@ -51,7 +51,7 @@ static void label_add(const char *name, int pc) {
 typedef struct {
     const char *mnemonic;
     int         opcode;
-    enum { FMT_R, FMT_R_MAC, FMT_R2_MAC_ACC, FMT_R2_MAC_ACC_NXT, FMT_R2_MUL_OVR, FMT_ACC_NEXT, FMT_I8, FMT_I13, FMT_BR, FMT_JMP, FMT_NOP, FMT_HALT } fmt;
+    enum { FMT_R, FMT_R_MAC, FMT_R_DP4A, FMT_R2_MAC_ACC, FMT_R2_DP4A_ACC, FMT_R2_MAC_ACC_NXT, FMT_R2_MUL_OVR, FMT_ACC_NEXT, FMT_I8, FMT_I13, FMT_BR, FMT_JMP, FMT_NOP, FMT_HALT } fmt;
 } OpEntry;
 
 static const OpEntry optable[] = {
@@ -59,7 +59,9 @@ static const OpEntry optable[] = {
     {"SUB",  0x1, FMT_R},
     {"MUL",  0x2, FMT_R},
     {"MAC",     0x2, FMT_R_MAC},
+    {"DP4A",    0x2, FMT_R_DP4A},
     {"MAC_ACC", 0x2, FMT_R2_MAC_ACC},
+    {"DP4A_ACC",0x2, FMT_R2_DP4A_ACC},
     {"MAC_ACC_NXT", 0x2, FMT_R2_MAC_ACC_NXT},
     {"MUL_OVR", 0x2, FMT_R2_MUL_OVR},
     {"MAC_Z",   0x2, FMT_R2_MUL_OVR},
@@ -286,8 +288,21 @@ static uint32_t pass2_encode(int pc, const char *original_line, int line_no) {
         }
         return encode_r(op->opcode, rd, rs1, rs2) | 0x01;
 
+    case FMT_R_DP4A:
+        if (ntok - ti < 4) {
+            fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 需要3个寄存器操作数\n", line_no, mnem);
+            exit(1);
+        }
+        rd  = parse_reg(tokens[ti + 1]);
+        rs1 = parse_reg(tokens[ti + 2]);
+        rs2 = parse_reg(tokens[ti + 3]);
+        if (rd < 0 || rs1 < 0 || rs2 < 0) {
+            fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 中的寄存器无效\n", line_no, mnem);
+            exit(1);
+        }
+        return encode_r(op->opcode, rd, rs1, rs2) | 0x80;
+
     case FMT_R2_MAC_ACC:
-        /* MAC_ACC rs1, rs2 — no rd, imm8[1:0]=10 */
         if (ntok - ti < 3) {
             fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 需要2个寄存器操作数\n", line_no, mnem);
             exit(1);
@@ -299,6 +314,19 @@ static uint32_t pass2_encode(int pc, const char *original_line, int line_no) {
             exit(1);
         }
         return encode_r(op->opcode, 0, rs1, rs2) | 0x02;
+
+    case FMT_R2_DP4A_ACC:
+        if (ntok - ti < 3) {
+            fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 需要2个寄存器操作数\n", line_no, mnem);
+            exit(1);
+        }
+        rs1 = parse_reg(tokens[ti + 1]);
+        rs2 = parse_reg(tokens[ti + 2]);
+        if (rs1 < 0 || rs2 < 0) {
+            fprintf(stderr, "[错误的]: 第 %d 行: 指令 '%s' 中的寄存器无效\n", line_no, mnem);
+            exit(1);
+        }
+        return encode_r(op->opcode, 0, rs1, rs2) | 0x82;
 
     case FMT_R2_MAC_ACC_NXT:
         if (ntok - ti < 3) {

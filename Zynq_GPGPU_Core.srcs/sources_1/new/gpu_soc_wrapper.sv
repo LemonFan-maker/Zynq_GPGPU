@@ -67,22 +67,12 @@ module gpu_soc_wrapper (
     localparam DMEM_DEPTH = 4096;
     localparam DMEM_ADDR_W = 12;
     localparam NUM_LANES = 8;
+    localparam [31:0] GPU_BUILD_ID = 32'h26032404;
 
     logic [31:0] imem [0:IMEM_DEPTH-1];
 
     logic gpu_start_run;
-    logic gpu_start_run_r;
     logic gpu_start_pulse;
-
-    always_ff @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
-        if (!S_AXI_ARESETN) begin
-            gpu_start_run_r <= 1'b0;
-        end else begin
-            gpu_start_run_r <= gpu_start_run;
-        end
-    end
-
-    assign gpu_start_pulse = gpu_start_run & ~gpu_start_run_r;
 
     logic [31:0] dma_src_addr_reg;
     logic [31:0] dma_dst_addr_reg;
@@ -142,6 +132,8 @@ module gpu_soc_wrapper (
     logic [16:0] axi_wr_addr;
     assign axi_wr_valid = axi_wready_reg && S_AXI_WVALID && axi_awready_reg && S_AXI_AWVALID;
     assign axi_wr_addr  = axi_awaddr_reg[16:0];
+    logic        ctrl_wr_hit;
+    assign ctrl_wr_hit = axi_wr_valid && (axi_wr_addr == 17'h0000);
 
     // AXI write DMEM index and lane (8 lanes: entry*32 + lane*4)
     logic [DMEM_ADDR_W-1:0] axi_dmem_idx;
@@ -149,12 +141,17 @@ module gpu_soc_wrapper (
     assign axi_dmem_idx  = (axi_wr_addr - 17'h2000) >> 5;
     assign axi_dmem_lane = axi_awaddr_reg[4:2];
 
-    // CTRL register
     always_ff @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
         if (!S_AXI_ARESETN) begin
             gpu_start_run <= 1'b0;
-        end else if (axi_wr_valid && axi_wr_addr == 17'h0000) begin
-            gpu_start_run <= S_AXI_WDATA[0];
+            gpu_start_pulse <= 1'b0;
+        end else begin
+            gpu_start_pulse <= 1'b0;
+            if (ctrl_wr_hit) begin
+                gpu_start_run <= S_AXI_WDATA[0];
+                if (S_AXI_WDATA[0])
+                    gpu_start_pulse <= 1'b1;
+            end
         end
     end
 
@@ -208,7 +205,31 @@ module gpu_soc_wrapper (
     logic [7:0]   gpu_flag_zero;
     logic         gpu_done;
 
+    logic [31:0] dbg_start_cnt;
+    logic [31:0] dbg_done_cnt;
+    logic [31:0] dbg_last_pc;
+    logic [31:0] dbg_status_flags;
+    logic        gpu_done_d;
+
     assign gpu_imem_data = imem[gpu_imem_addr[9:0]];
+
+    always_ff @(posedge S_AXI_ACLK or negedge S_AXI_ARESETN) begin
+        if (!S_AXI_ARESETN) begin
+            dbg_start_cnt    <= 32'h0;
+            dbg_done_cnt     <= 32'h0;
+            dbg_last_pc      <= 32'h0;
+            dbg_status_flags <= 32'h0;
+            gpu_done_d       <= 1'b0;
+        end else begin
+            gpu_done_d <= gpu_done;
+            dbg_last_pc <= gpu_imem_addr;
+            dbg_status_flags <= {28'h0, gpu_start_pulse, gpu_done, dma_busy, gpu_start_run};
+            if (gpu_start_pulse)
+                dbg_start_cnt <= dbg_start_cnt + 32'd1;
+            if (!gpu_done_d && gpu_done)
+                dbg_done_cnt <= dbg_done_cnt + 32'd1;
+        end
+    end
 
     logic [11:0]  dma_dmem_addr;
     logic [7:0]   dma_dmem_we;
@@ -586,6 +607,16 @@ module gpu_soc_wrapper (
                             axi_rdata_reg <= {31'h0, dma_busy};
                         else if (axi_rd_addr == 17'h0024)
                             axi_rdata_reg <= 32'h0; // ACC_CLR is write-only, self-clearing
+                        else if (axi_rd_addr == 17'h0028)
+                            axi_rdata_reg <= dbg_start_cnt;
+                        else if (axi_rd_addr == 17'h002C)
+                            axi_rdata_reg <= dbg_done_cnt;
+                        else if (axi_rd_addr == 17'h0030)
+                            axi_rdata_reg <= dbg_last_pc;
+                        else if (axi_rd_addr == 17'h0034)
+                            axi_rdata_reg <= dbg_status_flags;
+                        else if (axi_rd_addr == 17'h00FC)
+                            axi_rdata_reg <= GPU_BUILD_ID;
                         else if (axi_rd_addr >= 17'h0100 && axi_rd_addr <= 17'h10FF)
                             axi_rdata_reg <= imem[(axi_rd_addr[15:0] - 16'h0100) >> 2];
                         else if (axi_rd_addr >= 17'h2000)

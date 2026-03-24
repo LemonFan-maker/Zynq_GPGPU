@@ -62,6 +62,9 @@ tools/gpuasm
 # FPGA 比特流和硬件导出
 *.bit
 *.xsa
+*.pb
+*.rpt
+xsim.dir/
 
 # =========================
 # CMake / 构建系统
@@ -83,6 +86,7 @@ compile_commands.json
 
 .cache/
 .vscode/
+tmp/
 .clangd
 *.idx
 

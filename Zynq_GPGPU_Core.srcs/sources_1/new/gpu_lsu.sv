@@ -20,18 +20,15 @@ module gpu_lsu #(
     output logic [NUM_LANES*32-1:0] out_dmem_wdata,
     input  logic [NUM_LANES*32-1:0] in_dmem_rdata,
 
-    // 分发给所有Lane的读回数据
     output logic [NUM_LANES*32-1:0] out_wb_data_vector
 );
 
     assign out_dmem_addr = in_base_addr + in_offset;
 
-    // 读写控制及128-bit宽带数据透传
     assign out_dmem_re    = in_mem_re;
     assign out_dmem_we    = in_mem_we;
     assign out_dmem_wdata = in_wdata_vector;
 
-    // 读回的128-bit数据直接分发
     assign out_wb_data_vector = in_dmem_rdata;
 
 endmodule

@@ -151,7 +151,7 @@
 			xlnx,pcw-nor-grp-sram-cs0-enable = <0>;
 			xlnx,pcw-clk1-freq = <10000000>;
 			xlnx,pcw-mio-48-slew = "slow";
-			xlnx,pcw-m-axi-gp0-freqmhz = <50>;
+			xlnx,pcw-m-axi-gp0-freqmhz = <75>;
 			xlnx,pcw-ttc0-clk2-peripheral-divisor0 = <1>;
 			xlnx,pcw-mio-45-slew = "<Select>";
 			xlnx,pcw-mio-23-iotype = "<Select>";
@@ -395,7 +395,7 @@
 			xlnx,pcw-fclk0-peripheral-divisor0 = <6>;
 			xlnx,pcw-nor-cs0-t-tr = <1>;
 			xlnx,pcw-ddr-priority-readport-3 = "<Select>";
-			xlnx,pcw-fclk0-peripheral-divisor1 = <6>;
+			xlnx,pcw-fclk0-peripheral-divisor1 = <4>;
 			xlnx,pcw-gpio-emio-gpio-io = "<Select>";
 			xlnx,pcw-smc-peripheral-valid = <0>;
 			xlnx,pcw-uart1-peripheral-enable = <1>;
@@ -455,7 +455,7 @@
 			xlnx,pcw-mio-51-slew = "<Select>";
 			xlnx,pcw-fclk2-peripheral-divisor1 = <1>;
 			xlnx,pcw-fpga-fclk2-enable = <0>;
-			xlnx,pcw-clk0-freq = <50000000>;
+			xlnx,pcw-clk0-freq = <75000000>;
 			xlnx,pcw-mio-47-slew = "<Select>";
 			xlnx,pcw-sdio-peripheral-divisor0 = <1>;
 			xlnx,pcw-use-expanded-iop = <0>;
@@ -489,7 +489,7 @@
 			xlnx,pcw-uiparam-ddr-dq-0-propogation-delay = <160>;
 			xlnx,pcw-mio-24-slew = "<Select>";
 			xlnx,pcw-mio-44-direction = "<Select>";
-			xlnx,pcw-fpga0-peripheral-freqmhz = <50>;
+			xlnx,pcw-fpga0-peripheral-freqmhz = <75>;
 			xlnx,pcw-mio-8-iotype = "<Select>";
 			xlnx,pcw-iopll-ctrl-fbdiv = <54>;
 			xlnx,pcw-mio-45-iotype = "<Select>";
@@ -638,7 +638,7 @@
 			xlnx,pcw-mio-22-direction = "<Select>";
 			xlnx,pcw-mio-47-pullup = "<Select>";
 			xlnx,pcw-apu-clk-ratio-enable = "6:2:1";
-			xlnx,pcw-act-fpga0-peripheral-freqmhz = <50>;
+			xlnx,pcw-act-fpga0-peripheral-freqmhz = <75>;
 			xlnx,pcw-p2f-dmac2-intr = <0>;
 			xlnx,pcw-fclk2-peripheral-clksrc = "IO , PLL";
 			xlnx,pcw-usb1-usb1-io = "<Select>";
@@ -730,7 +730,7 @@
 			xlnx,pcw-mio-29-pullup = "<Select>";
 			xlnx,pcw-mio-30-pullup = "<Select>";
 			xlnx,trace-internal-width = <2>;
-			xlnx,pcw-s-axi-hp0-freqmhz = <50>;
+			xlnx,pcw-s-axi-hp0-freqmhz = <75>;
 			xlnx,pcw-mio-7-direction = "<Select>";
 			xlnx,pcw-i2c0-reset-enable = <0>;
 			xlnx,pcw-mio-53-slew = "<Select>";

@@ -4,7 +4,7 @@ import gpu_types_pkg::*;
 module gpu_core_top (
     input  logic        clk,
     input  logic        rst_n,
-    input  logic        start_pulse, // 用于启动计算，替代之前的 rst_n 耦合逻辑
+    input  logic        start_pulse,
 
     output logic [31:0] out_imem_addr,
     input  logic [31:0] in_imem_data,
@@ -17,7 +17,6 @@ module gpu_core_top (
 
     output logic [7:0]  out_flag_zero,
 
-    // Accumulator buffer interface
     input  logic        in_acc_clr,
     input  logic [5:0]  in_acc_rd_addr,
     output logic [255:0] out_acc_rd_data,
@@ -25,11 +24,9 @@ module gpu_core_top (
     output logic        gpu_done
 );
 
-    // PC 寄存器
     logic [31:0] pc;
     assign out_imem_addr = pc;
 
-    // Decoder 输出
     logic        dec_we;
     logic [4:0]  dec_rd_addr;
     logic [4:0]  dec_rs1_addr;
@@ -44,37 +41,133 @@ module gpu_core_top (
     logic        dec_is_mac;
     logic        dec_is_mac_acc;
     logic        dec_is_mac_acc_nxt;
+    logic        dec_is_dp4a;
     logic        dec_is_mul_ovr;
     logic        dec_is_acc_next;
     logic        dec_halt;
 
-    // 分支判断
     logic        branch_taken;
-
-    // HALT 状态
     logic        halted;
     assign gpu_done = halted;
 
-    // 取指+解码都是组合逻辑，不存在流水线气泡问题
-    // PC 跳转后，下一周期自然解码目标地址的指令，无需 flush
+    logic [31:0] id_ex_pc;
+    logic        id_ex_valid;
+    logic        id_ex_we;
+    (* max_fanout = 8 *) logic [4:0] id_ex_rd_addr;
+    (* max_fanout = 8 *) logic [4:0] id_ex_rs1_addr;
+    (* max_fanout = 8 *) logic [4:0] id_ex_rs2_addr;
+    alu_op_t     id_ex_alu_op;
+    logic [31:0] id_ex_imm;
+    logic        id_ex_mem_re;
+    logic        id_ex_mem_we;
+    logic        id_ex_is_branch;
+    logic        id_ex_is_jump;
+    logic        id_ex_is_addi;
+    logic        id_ex_is_mac;
+    logic        id_ex_is_mac_acc;
+    logic        id_ex_is_mac_acc_nxt;
+    logic        id_ex_is_dp4a;
+    logic        id_ex_is_mul_ovr;
+    logic        id_ex_is_acc_next;
+    logic        id_ex_halt;
 
-    // PC 逻辑
+    logic ctrl_redirect;
+    assign ctrl_redirect = id_ex_halt || id_ex_is_jump || (id_ex_is_branch && branch_taken);
+
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             pc     <= 32'h0;
-            halted <= 1'b0;
+            halted <= 1'b1;
         end else if (start_pulse) begin
             pc     <= 32'h0;
             halted <= 1'b0;
         end else if (!halted) begin
-            if (dec_halt) begin
+            if (id_ex_halt) begin
                 halted <= 1'b1;
-            end else if (dec_is_jump) begin
-                pc <= {19'b0, dec_imm[12:0]};
-            end else if (dec_is_branch && branch_taken) begin
-                pc <= pc + dec_imm;
+            end else if (id_ex_is_jump) begin
+                pc <= {19'b0, id_ex_imm[12:0]};
+            end else if (id_ex_is_branch && branch_taken) begin
+                pc <= id_ex_pc + id_ex_imm;
             end else begin
                 pc <= pc + 1'b1;
+            end
+        end
+    end
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            id_ex_pc            <= 32'h0;
+            id_ex_valid         <= 1'b0;
+            id_ex_we            <= 1'b0;
+            id_ex_rd_addr       <= 5'd0;
+            id_ex_rs1_addr      <= 5'd0;
+            id_ex_rs2_addr      <= 5'd0;
+            id_ex_alu_op        <= ALU_ADD;
+            id_ex_imm           <= 32'h0;
+            id_ex_mem_re        <= 1'b0;
+            id_ex_mem_we        <= 1'b0;
+            id_ex_is_branch     <= 1'b0;
+            id_ex_is_jump       <= 1'b0;
+            id_ex_is_addi       <= 1'b0;
+            id_ex_is_mac        <= 1'b0;
+            id_ex_is_mac_acc    <= 1'b0;
+            id_ex_is_mac_acc_nxt<= 1'b0;
+            id_ex_is_dp4a       <= 1'b0;
+            id_ex_is_mul_ovr    <= 1'b0;
+            id_ex_is_acc_next   <= 1'b0;
+            id_ex_halt          <= 1'b0;
+        end else if (start_pulse) begin
+            id_ex_valid         <= 1'b0;
+            id_ex_we            <= 1'b0;
+            id_ex_mem_re        <= 1'b0;
+            id_ex_mem_we        <= 1'b0;
+            id_ex_is_branch     <= 1'b0;
+            id_ex_is_jump       <= 1'b0;
+            id_ex_is_addi       <= 1'b0;
+            id_ex_is_mac        <= 1'b0;
+            id_ex_is_mac_acc    <= 1'b0;
+            id_ex_is_mac_acc_nxt<= 1'b0;
+            id_ex_is_dp4a       <= 1'b0;
+            id_ex_is_mul_ovr    <= 1'b0;
+            id_ex_is_acc_next   <= 1'b0;
+            id_ex_halt          <= 1'b0;
+        end else if (!halted) begin
+            if (ctrl_redirect) begin
+                id_ex_valid         <= 1'b0;
+                id_ex_we            <= 1'b0;
+                id_ex_mem_re        <= 1'b0;
+                id_ex_mem_we        <= 1'b0;
+                id_ex_is_branch     <= 1'b0;
+                id_ex_is_jump       <= 1'b0;
+                id_ex_is_addi       <= 1'b0;
+                id_ex_is_mac        <= 1'b0;
+                id_ex_is_mac_acc    <= 1'b0;
+                id_ex_is_mac_acc_nxt<= 1'b0;
+                id_ex_is_dp4a       <= 1'b0;
+                id_ex_is_mul_ovr    <= 1'b0;
+                id_ex_is_acc_next   <= 1'b0;
+                id_ex_halt          <= 1'b0;
+            end else begin
+                id_ex_pc            <= pc;
+                id_ex_valid         <= 1'b1;
+                id_ex_we            <= dec_we;
+                id_ex_rd_addr       <= dec_rd_addr;
+                id_ex_rs1_addr      <= dec_rs1_addr;
+                id_ex_rs2_addr      <= dec_rs2_addr;
+                id_ex_alu_op        <= dec_alu_op;
+                id_ex_imm           <= dec_imm;
+                id_ex_mem_re        <= dec_mem_re;
+                id_ex_mem_we        <= dec_mem_we;
+                id_ex_is_branch     <= dec_is_branch;
+                id_ex_is_jump       <= dec_is_jump;
+                id_ex_is_addi       <= dec_is_addi;
+                id_ex_is_mac        <= dec_is_mac;
+                id_ex_is_mac_acc    <= dec_is_mac_acc;
+                id_ex_is_mac_acc_nxt<= dec_is_mac_acc_nxt;
+                id_ex_is_dp4a       <= dec_is_dp4a;
+                id_ex_is_mul_ovr    <= dec_is_mul_ovr;
+                id_ex_is_acc_next   <= dec_is_acc_next;
+                id_ex_halt          <= dec_halt;
             end
         end
     end
@@ -95,29 +188,31 @@ module gpu_core_top (
         .out_is_mac   (dec_is_mac),
         .out_is_mac_acc(dec_is_mac_acc),
         .out_is_mac_acc_nxt(dec_is_mac_acc_nxt),
+        .out_is_dp4a  (dec_is_dp4a),
         .out_is_mul_ovr(dec_is_mul_ovr),
         .out_is_acc_next(dec_is_acc_next),
         .out_halt     (dec_halt)
     );
 
-    gpu_exec_unit #( .NUM_LANES(8) ) u_exec_unit (
+    gpu_exec_unit #(.NUM_LANES(8)) u_exec_unit (
         .clk            (clk),
         .rst_n          (rst_n),
-        .in_we          (dec_we),
-        .in_rd_addr     (dec_rd_addr),
-        .in_rs1_addr    (dec_rs1_addr),
-        .in_rs2_addr    (dec_rs2_addr),
-        .in_alu_op      (dec_alu_op),
-        .in_imm         (dec_imm),
-        .in_mem_re      (dec_mem_re),
-        .in_mem_we      (dec_mem_we),
-        .in_is_addi     (dec_is_addi),
-        .in_is_mac      (dec_is_mac),
-        .in_is_mac_acc  (dec_is_mac_acc),
-        .in_is_mac_acc_nxt(dec_is_mac_acc_nxt),
-        .in_is_mul_ovr  (dec_is_mul_ovr),
-        .in_is_acc_next (dec_is_acc_next),
-        .in_flush       (1'b0),
+        .in_we          (id_ex_we),
+        .in_rd_addr     (id_ex_rd_addr),
+        .in_rs1_addr    (id_ex_rs1_addr),
+        .in_rs2_addr    (id_ex_rs2_addr),
+        .in_alu_op      (id_ex_alu_op),
+        .in_imm         (id_ex_imm),
+        .in_mem_re      (id_ex_mem_re),
+        .in_mem_we      (id_ex_mem_we),
+        .in_is_addi     (id_ex_is_addi),
+        .in_is_mac      (id_ex_is_mac),
+        .in_is_mac_acc  (id_ex_is_mac_acc),
+        .in_is_mac_acc_nxt(id_ex_is_mac_acc_nxt),
+        .in_is_dp4a     (id_ex_is_dp4a),
+        .in_is_mul_ovr  (id_ex_is_mul_ovr),
+        .in_is_acc_next (id_ex_is_acc_next),
+        .in_flush       (start_pulse),
         .in_acc_clr     (in_acc_clr),
 
         .out_dmem_re    (out_dmem_re),

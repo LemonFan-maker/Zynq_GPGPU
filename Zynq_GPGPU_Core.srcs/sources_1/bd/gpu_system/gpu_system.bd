@@ -14,7 +14,7 @@
       "processing_system7_0": "",
       "gpu_soc_wrapper_v_0": "",
       "axi_smc": "",
-      "rst_ps7_0_50M": "",
+      "rst_ps7_0_75M": "",
       "axi_mem_intercon": {
         "s00_couplers": {
           "auto_pc": ""
@@ -234,7 +234,7 @@
             "value": "10.000000"
           },
           "PCW_ACT_FPGA0_PERIPHERAL_FREQMHZ": {
-            "value": "50.000000"
+            "value": "75.000000"
           },
           "PCW_ACT_FPGA1_PERIPHERAL_FREQMHZ": {
             "value": "10.000000"
@@ -324,7 +324,7 @@
             "value": "0"
           },
           "PCW_CLK0_FREQ": {
-            "value": "50000000"
+            "value": "75000000"
           },
           "PCW_CLK1_FREQ": {
             "value": "10000000"
@@ -594,7 +594,7 @@
             "value": "TRUE"
           },
           "PCW_FPGA0_PERIPHERAL_FREQMHZ": {
-            "value": "50"
+            "value": "75"
           },
           "PCW_FPGA1_PERIPHERAL_FREQMHZ": {
             "value": "50"
@@ -1450,7 +1450,7 @@
                 "value_src": "constant"
               },
               "FREQ_HZ": {
-                "value": "50000000",
+                "value": "75000000",
                 "value_src": "constant"
               },
               "ID_WIDTH": {
@@ -1729,7 +1729,7 @@
                 "value_src": "constant"
               },
               "FREQ_HZ": {
-                "value": "50000000",
+                "value": "75000000",
                 "value_src": "constant"
               },
               "ID_WIDTH": {
@@ -1938,7 +1938,7 @@
                 "value_src": "constant"
               },
               "FREQ_HZ": {
-                "value": "50000000",
+                "value": "75000000",
                 "value_src": "constant"
               },
               "CLK_DOMAIN": {
@@ -1970,8 +1970,8 @@
       "axi_smc": {
         "vlnv": "xilinx.com:ip:smartconnect:1.0",
         "ip_revision": "28",
-        "xci_name": "gpu_system_axi_smc_5",
-        "xci_path": "ip/gpu_system_axi_smc_5/gpu_system_axi_smc_5.xci",
+        "xci_name": "gpu_system_axi_smc_13",
+        "xci_path": "ip/gpu_system_axi_smc_13/gpu_system_axi_smc_13.xci",
         "inst_hier_path": "axi_smc",
         "has_run_ip_tcl": "true",
         "parameters": {
@@ -2039,19 +2039,19 @@
           }
         }
       },
-      "rst_ps7_0_50M": {
+      "rst_ps7_0_75M": {
         "vlnv": "xilinx.com:ip:proc_sys_reset:5.0",
         "ip_revision": "17",
-        "xci_name": "gpu_system_rst_ps7_0_50M_1",
-        "xci_path": "ip/gpu_system_rst_ps7_0_50M_1/gpu_system_rst_ps7_0_50M_1.xci",
-        "inst_hier_path": "rst_ps7_0_50M",
+        "xci_name": "gpu_system_rst_ps7_0_75M_1",
+        "xci_path": "ip/gpu_system_rst_ps7_0_75M_1/gpu_system_rst_ps7_0_75M_1.xci",
+        "inst_hier_path": "rst_ps7_0_75M",
         "has_run_ip_tcl": "true"
       },
       "axi_mem_intercon": {
         "vlnv": "xilinx.com:ip:axi_interconnect:2.1",
-        "xci_path": "ip/gpu_system_axi_mem_intercon_1/gpu_system_axi_mem_intercon_1.xci",
+        "xci_path": "ip/gpu_system_axi_mem_intercon_10/gpu_system_axi_mem_intercon_10.xci",
         "inst_hier_path": "axi_mem_intercon",
-        "xci_name": "gpu_system_axi_mem_intercon_1",
+        "xci_name": "gpu_system_axi_mem_intercon_10",
         "parameters": {
           "NUM_MI": {
             "value": "1"
@@ -2192,8 +2192,8 @@
               "auto_pc": {
                 "vlnv": "xilinx.com:ip:axi_protocol_converter:2.1",
                 "ip_revision": "37",
-                "xci_name": "gpu_system_axi_mem_intercon_imp_auto_pc_0",
-                "xci_path": "ip/gpu_system_axi_mem_intercon_imp_auto_pc_0/gpu_system_axi_mem_intercon_imp_auto_pc_0.xci",
+                "xci_name": "gpu_system_axi_mem_intercon_imp_auto_pc_2",
+                "xci_path": "ip/gpu_system_axi_mem_intercon_imp_auto_pc_2/gpu_system_axi_mem_intercon_imp_auto_pc_2.xci",
                 "inst_hier_path": "axi_mem_intercon/s00_couplers/auto_pc",
                 "has_run_ip_tcl": "true",
                 "parameters": {
@@ -2350,7 +2350,7 @@
           "processing_system7_0/M_AXI_GP0_ACLK",
           "axi_smc/aclk",
           "gpu_soc_wrapper_v_0/S_AXI_ACLK",
-          "rst_ps7_0_50M/slowest_sync_clk",
+          "rst_ps7_0_75M/slowest_sync_clk",
           "axi_mem_intercon/S00_ACLK",
           "processing_system7_0/S_AXI_HP0_ACLK",
           "axi_mem_intercon/M00_ACLK",
@@ -2360,12 +2360,12 @@
       "processing_system7_0_FCLK_RESET0_N": {
         "ports": [
           "processing_system7_0/FCLK_RESET0_N",
-          "rst_ps7_0_50M/ext_reset_in"
+          "rst_ps7_0_75M/ext_reset_in"
         ]
       },
-      "rst_ps7_0_50M_peripheral_aresetn": {
+      "rst_ps7_0_75M_peripheral_aresetn": {
         "ports": [
-          "rst_ps7_0_50M/peripheral_aresetn",
+          "rst_ps7_0_75M/peripheral_aresetn",
           "gpu_soc_wrapper_v_0/S_AXI_ARESETN",
           "axi_smc/aresetn",
           "axi_mem_intercon/S00_ARESETN",

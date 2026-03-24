@@ -19,12 +19,9 @@ module gpu_regfile (
 
     logic [31:0] regs [31:0];
 
-    assign rdata1 = (raddr1 == 5'b0) ? 32'h0 :
-                    (we && waddr != 5'b0 && waddr == raddr1) ? wdata : regs[raddr1];
-    assign rdata2 = (raddr2 == 5'b0) ? 32'h0 :
-                    (we && waddr != 5'b0 && waddr == raddr2) ? wdata : regs[raddr2];
-    assign rdata3 = (raddr3 == 5'b0) ? 32'h0 :
-                    (we && waddr != 5'b0 && waddr == raddr3) ? wdata : regs[raddr3];
+    assign rdata1 = (raddr1 == 5'b0) ? 32'h0 : regs[raddr1];
+    assign rdata2 = (raddr2 == 5'b0) ? 32'h0 : regs[raddr2];
+    assign rdata3 = (raddr3 == 5'b0) ? 32'h0 : regs[raddr3];
 
     always_ff @(posedge clk) begin
         if (we && (waddr != 5'b0)) begin
