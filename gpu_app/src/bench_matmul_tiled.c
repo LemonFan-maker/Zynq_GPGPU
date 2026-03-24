@@ -18,6 +18,7 @@ void bench_matmul_tiled_run(void)
 #else
     xil_printf("  [CFG] overlap preload: ON\n\r");
 #endif
+    xil_printf("  [CFG] B-tile reuse across ti: ON\n\r");
 
     uint32_t stride = 16 * 32;
     for (int r = 0; r < 16; r++) {
@@ -44,12 +45,18 @@ void bench_matmul_tiled_run(void)
     uint64_t t_pipe_start = timer_now();
     uint64_t total_gpu_ticks = 0;
 
-    for (int ti = 0; ti < 2; ti++) {
-        for (int tj = 0; tj < 2; tj++) {
+    for (int tj = 0; tj < 2; tj++) {
+        // B tiles (tk0/tk1) depend on tj only; preload once and reuse for both ti.
+        {
+            uint32_t src_B0 = DDR_BUF_B + (0 * 8 * 16 + tj * 8) * 32;
+            uint32_t src_B1 = DDR_BUF_B + (1 * 8 * 16 + tj * 8) * 32;
+            vdma_to_dmem(src_B0, PING_BASE + 64, 8, 8, stride);
+            vdma_to_dmem(src_B1, PONG_BASE + 64, 8, 8, stride);
+        }
+
+        for (int ti = 0; ti < 2; ti++) {
             uint32_t src_A = DDR_BUF_A + (ti * 8 * 16 + 0 * 8) * 32;
-            uint32_t src_B = DDR_BUF_B + (0 * 8 * 16 + tj * 8) * 32;
-            vdma_to_dmem(src_A, PING_BASE,      8, 8, stride);
-            vdma_to_dmem(src_B, PING_BASE + 64, 8, 8, stride);
+            vdma_to_dmem(src_A, PING_BASE, 8, 8, stride);
 
             for (int l = 0; l < NUM_LANES; l++)
                 DMEM_WR(PARAM_ENTRY, l, base_by_tk[0]);
@@ -63,9 +70,8 @@ void bench_matmul_tiled_run(void)
 #if !B5_DISABLE_OVERLAP
             {
                 uint32_t src_A_next = DDR_BUF_A + (ti * 8 * 16 + 1 * 8) * 32;
-                uint32_t src_B_next = DDR_BUF_B + (1 * 8 * 16 + tj * 8) * 32;
-                vdma_to_dmem(src_A_next, base_by_tk[1],      8, 8, stride);
-                vdma_to_dmem(src_B_next, base_by_tk[1] + 64, 8, 8, stride);
+                // Load only A for tk1; B for tk1 was already preloaded once per tj.
+                vdma_to_dmem(src_A_next, base_by_tk[1], 8, 8, stride);
             }
 #endif
 
@@ -80,9 +86,7 @@ void bench_matmul_tiled_run(void)
 #if B5_DISABLE_OVERLAP
             {
                 uint32_t src_A_next = DDR_BUF_A + (ti * 8 * 16 + 1 * 8) * 32;
-                uint32_t src_B_next = DDR_BUF_B + (1 * 8 * 16 + tj * 8) * 32;
-                vdma_to_dmem(src_A_next, base_by_tk[1],      8, 8, stride);
-                vdma_to_dmem(src_B_next, base_by_tk[1] + 64, 8, 8, stride);
+                vdma_to_dmem(src_A_next, base_by_tk[1], 8, 8, stride);
             }
 #endif
             uint64_t t1 = timer_now();
