@@ -3,6 +3,9 @@
 
 #include "mnist_fc_data.h"
 #include "xil_cache.h"
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#include <arm_neon.h>
+#endif
 
 #define MNIST_A1_Q_SHIFT 20
 #define MNIST_A1_Q_MUL ((int32_t)(MNIST_FC_X_SCALE * MNIST_FC_W1_SCALE * 127.0f * (float)(1U << MNIST_A1_Q_SHIFT) + 0.5f))
@@ -36,6 +39,43 @@ static inline void fc1_blocked_accumulate(
 
 static inline void fc1_fast_accumulate(const uint8_t *x_row, int32_t *acc_h, int in_dim, int hid_dim)
 {
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+    int h = 0;
+    for (; h + 15 < hid_dim; h += 16) {
+        int32x4_t acc0 = vld1q_s32(&acc_h[h + 0]);
+        int32x4_t acc1 = vld1q_s32(&acc_h[h + 4]);
+        int32x4_t acc2 = vld1q_s32(&acc_h[h + 8]);
+        int32x4_t acc3 = vld1q_s32(&acc_h[h + 12]);
+
+        const int8_t *w_ptr = &mnist_fc_w1_q[h];
+        for (int i = 0; i < in_dim; i++) {
+            const int16x4_t x4 = vdup_n_s16((int16_t)x_row[i]);
+            const int8x16_t w8 = vld1q_s8(w_ptr);
+            const int16x8_t w_lo = vmovl_s8(vget_low_s8(w8));
+            const int16x8_t w_hi = vmovl_s8(vget_high_s8(w8));
+            acc0 = vmlal_s16(acc0, vget_low_s16(w_lo), x4);
+            acc1 = vmlal_s16(acc1, vget_high_s16(w_lo), x4);
+            acc2 = vmlal_s16(acc2, vget_low_s16(w_hi), x4);
+            acc3 = vmlal_s16(acc3, vget_high_s16(w_hi), x4);
+            w_ptr += hid_dim;
+        }
+
+        vst1q_s32(&acc_h[h + 0], acc0);
+        vst1q_s32(&acc_h[h + 4], acc1);
+        vst1q_s32(&acc_h[h + 8], acc2);
+        vst1q_s32(&acc_h[h + 12], acc3);
+    }
+
+    for (; h < hid_dim; h++) {
+        const int8_t *w_ptr = &mnist_fc_w1_q[h];
+        int32_t acc = acc_h[h];
+        for (int i = 0; i < in_dim; i++) {
+            acc += (int32_t)x_row[i] * (int32_t)(*w_ptr);
+            w_ptr += hid_dim;
+        }
+        acc_h[h] = acc;
+    }
+#else
     for (int i = 0; i < in_dim; i++) {
         const int32_t xi = (int32_t)x_row[i];
         const int8_t *w_row = &mnist_fc_w1_q[i * hid_dim];
@@ -43,6 +83,7 @@ static inline void fc1_fast_accumulate(const uint8_t *x_row, int32_t *acc_h, int
             acc_h[h] += xi * (int32_t)w_row[h];
         }
     }
+#endif
 }
 
 static inline void requant_relu_u8_127(const int32_t *acc_h, uint8_t *a1_q, int hid_dim, int32_t mul, int32_t round)
