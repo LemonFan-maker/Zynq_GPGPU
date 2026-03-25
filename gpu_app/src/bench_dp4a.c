@@ -81,8 +81,8 @@ void bench_dp4a_smoke(void)
         const uint32_t va = (uint32_t)g_dp4a_seed_a[i & 7];
         const uint32_t vb = (uint32_t)g_dp4a_seed_b[(i * 3) & 7];
         for (int l = 0; l < NUM_LANES; l++) {
-            Xil_Out32(DDR_BUF_A + i * 32 + l * 4, va);
-            Xil_Out32(DDR_BUF_A + (DP4A_B_BASE + i) * 32 + l * 4, vb);
+            Xil_Out32(DDR_BUF_A + i * BYTES_PER_ENTRY + l * 4U, va);
+            Xil_Out32(DDR_BUF_A + (DP4A_B_BASE + i) * BYTES_PER_ENTRY + l * 4U, vb);
         }
     }
 
@@ -117,7 +117,7 @@ void bench_dp4a_smoke(void)
         const int32_t a = g_dp4a_seed_a[i & 7];
         const int32_t b = g_dp4a_seed_b[(i * 3) & 7];
         const int32_t exp = dp4a_ref(a, b, 0);
-        const int32_t got = (int32_t)Xil_In32(DDR_BUF_B + i * 32);
+        const int32_t got = (int32_t)Xil_In32(DDR_BUF_B + i * BYTES_PER_ENTRY);
         if (got == exp)
             pass++;
         else if (shown_fail < 4) {
@@ -152,8 +152,8 @@ void bench_dp4a_accumulator(void)
         const uint32_t va = (uint32_t)g_dp4a_seed_a[(i * 5) & 7];
         const uint32_t vb = (uint32_t)g_dp4a_seed_b[(i * 3) & 7];
         for (int l = 0; l < NUM_LANES; l++) {
-            Xil_Out32(DDR_BUF_A + i * 32 + l * 4, va);
-            Xil_Out32(DDR_BUF_A + (DP4A_B_BASE + i) * 32 + l * 4, vb);
+            Xil_Out32(DDR_BUF_A + i * BYTES_PER_ENTRY + l * 4U, va);
+            Xil_Out32(DDR_BUF_A + (DP4A_B_BASE + i) * BYTES_PER_ENTRY + l * 4U, vb);
         }
     }
 
@@ -193,8 +193,8 @@ void bench_dp4a_accumulator(void)
         const int32_t b = g_dp4a_seed_b[(i * 3) & 7];
         const int32_t delta_exp = dp4a_ref(a, b, 0);
 
-        const int32_t s1 = (int32_t)Xil_In32(DDR_BUF_B + i * 32);
-        const int32_t s2 = (int32_t)Xil_In32(DDR_STAGE + i * 32);
+        const int32_t s1 = (int32_t)Xil_In32(DDR_BUF_B + i * BYTES_PER_ENTRY);
+        const int32_t s2 = (int32_t)Xil_In32(DDR_STAGE + i * BYTES_PER_ENTRY);
         const int32_t delta_got = s2 - s1;
 
         if (delta_got == delta_exp) {
@@ -241,8 +241,8 @@ void bench_dp4a_sustained(void)
         const uint32_t va = (uint32_t)g_dp4a_seed_a[i & 7];
         const uint32_t vb = (uint32_t)g_dp4a_seed_b[(i * 3) & 7];
         for (int l = 0; l < NUM_LANES; l++) {
-            Xil_Out32(DDR_BUF_A + i * 32 + l * 4, va);
-            Xil_Out32(DDR_BUF_A + (DP4A_SUS_B_BASE + i) * 32 + l * 4, vb);
+            Xil_Out32(DDR_BUF_A + i * BYTES_PER_ENTRY + l * 4U, va);
+            Xil_Out32(DDR_BUF_A + (DP4A_SUS_B_BASE + i) * BYTES_PER_ENTRY + l * 4U, vb);
         }
     }
 

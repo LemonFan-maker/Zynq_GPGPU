@@ -3,6 +3,8 @@ import gpu_types_pkg::*;
 
 module tb_gpu_core_top_dp4a();
     localparam int TB_TIMEOUT_CYCLES = 2000;
+    localparam int NUM_LANES = 16;
+    localparam int DMEM_DATA_W = NUM_LANES * 32;
 
     logic        tb_clk;
     logic        tb_rst_n;
@@ -12,16 +14,16 @@ module tb_gpu_core_top_dp4a();
     logic [31:0] tb_in_imem_data;
 
     logic        tb_out_dmem_re;
-    logic [7:0]  tb_out_dmem_we;
+    logic [NUM_LANES-1:0]  tb_out_dmem_we;
     logic [31:0] tb_out_dmem_addr;
-    logic [255:0] tb_out_dmem_wdata;
-    logic [255:0] tb_in_dmem_rdata;
+    logic [DMEM_DATA_W-1:0] tb_out_dmem_wdata;
+    logic [DMEM_DATA_W-1:0] tb_in_dmem_rdata;
 
-    logic [7:0]  tb_out_flag_zero;
+    logic [NUM_LANES-1:0]  tb_out_flag_zero;
 
     logic        tb_in_acc_clr;
     logic [5:0]  tb_in_acc_rd_addr;
-    logic [255:0] tb_out_acc_rd_data;
+    logic [DMEM_DATA_W-1:0] tb_out_acc_rd_data;
     logic        tb_gpu_done;
 
     function automatic [31:0] enc_i13(input [3:0] op, input [4:0] rd, input [4:0] rs1, input integer imm13);
@@ -46,7 +48,9 @@ module tb_gpu_core_top_dp4a();
         end
     endfunction
 
-    gpu_core_top uut (
+    gpu_core_top #(
+        .NUM_LANES(NUM_LANES)
+    ) uut (
         .clk             (tb_clk),
         .rst_n           (tb_rst_n),
         .start_pulse     (tb_start_pulse),
@@ -64,8 +68,8 @@ module tb_gpu_core_top_dp4a();
         .gpu_done        (tb_gpu_done)
     );
 
-    logic [31:0] imem [0:63] = '{default: '0};
-    logic [255:0] dmem [0:255] = '{default: '0};
+    logic [31:0] imem [0:63];
+    logic [DMEM_DATA_W-1:0] dmem [0:255];
 
     assign tb_in_imem_data = imem[tb_out_imem_addr[5:0]];
 
@@ -76,7 +80,7 @@ module tb_gpu_core_top_dp4a();
     end
 
     always_ff @(posedge tb_clk) begin
-        for (int i = 0; i < 8; i++) begin
+        for (int i = 0; i < NUM_LANES; i++) begin
             if (tb_out_dmem_we[i]) begin
                 dmem[tb_out_dmem_addr[7:0]][i*32 +: 32] <= tb_out_dmem_wdata[i*32 +: 32];
             end
@@ -84,6 +88,13 @@ module tb_gpu_core_top_dp4a();
     end
 
     initial begin
+        for (int i = 0; i < 64; i++) begin
+            imem[i] = 32'h0;
+        end
+        for (int i = 0; i < 256; i++) begin
+            dmem[i] = '0;
+        end
+
         tb_clk = 1'b0;
         forever #5 tb_clk = ~tb_clk;
     end

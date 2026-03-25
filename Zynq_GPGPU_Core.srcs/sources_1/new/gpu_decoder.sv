@@ -76,8 +76,6 @@ module gpu_decoder (
             4'h2: begin // MUL/MAC/MAC_ACC/ACC_NEXT + MUL_OVR (submode in imm8[3:2])
                 out_alu_op = ALU_MUL;
                 if (instruction[7:6] == 2'b10) begin
-                    // low[1:0]=00 -> DP4A (rd = dot4(rs1,rs2))
-                    // low[1:0]=10 -> DP4A_ACC (acc += dot4(rs1,rs2))
                     out_is_dp4a = 1'b1;
                     case (instruction[1:0])
                         2'b00: out_we = 1'b1;

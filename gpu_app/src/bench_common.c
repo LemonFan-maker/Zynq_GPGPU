@@ -31,7 +31,7 @@ void dma_to_dmem(uint32_t ddr, uint32_t entry, uint32_t n)
     Xil_Out32(GPU_DMA_DST, entry);
     Xil_Out32(GPU_DMA_X_SIZE, n);
     Xil_Out32(GPU_DMA_Y_SIZE, 1);
-    Xil_Out32(GPU_DMA_STRIDE, n * 32);
+    Xil_Out32(GPU_DMA_STRIDE, n * BYTES_PER_ENTRY);
     Xil_Out32(GPU_DMA_CMD, 0x01);
     while (Xil_In32(GPU_DMA_STATUS) & 1);
 }
@@ -42,7 +42,7 @@ void dma_to_ddr(uint32_t entry, uint32_t ddr, uint32_t n)
     Xil_Out32(GPU_DMA_DST, ddr);
     Xil_Out32(GPU_DMA_X_SIZE, n);
     Xil_Out32(GPU_DMA_Y_SIZE, 1);
-    Xil_Out32(GPU_DMA_STRIDE, n * 32);
+    Xil_Out32(GPU_DMA_STRIDE, n * BYTES_PER_ENTRY);
     Xil_Out32(GPU_DMA_CMD, 0x03);
     while (Xil_In32(GPU_DMA_STATUS) & 1);
 }
@@ -75,7 +75,7 @@ void dma_acc_flush(uint32_t ddr, uint32_t n)
     Xil_Out32(GPU_DMA_DST, ddr);
     Xil_Out32(GPU_DMA_X_SIZE, n);
     Xil_Out32(GPU_DMA_Y_SIZE, 1);
-    Xil_Out32(GPU_DMA_STRIDE, n * 32);
+    Xil_Out32(GPU_DMA_STRIDE, n * BYTES_PER_ENTRY);
     Xil_Out32(GPU_DMA_CMD, 0x07);
     while (Xil_In32(GPU_DMA_STATUS) & 1);
 }
@@ -220,10 +220,11 @@ void print_summary(void)
     xil_printf("  SoC:        Zynq-7020 (xc7z020clg400-2)\n\r");
     xil_printf("  ARM:        Cortex-A9 @ 667 MHz\n\r");
     xil_printf("  GPU Clock:  75 MHz (FCLK_CLK0)\n\r");
-    xil_printf("  SIMD Lanes: 8 x 32-bit integer\n\r");
+    xil_printf("  SIMD Lanes: %d x 32-bit integer\n\r", NUM_LANES);
     xil_printf("  Pipeline:   Fetch(comb) -> Decode(comb) -> Execute(1-clk) + Forwarding\n\r");
     xil_printf("  IMEM:       1024 x 32-bit instructions\n\r");
-    xil_printf("  DMEM:       4096 entries x 8 lanes x 32-bit = 128 KB\n\r");
+    xil_printf("  DMEM:       4096 entries x %d lanes x 32-bit = %d KB\n\r", NUM_LANES,
+               (4096 * NUM_LANES * 4) / 1024);
     xil_printf("  ISA:        +DP4A extension enabled\n\r");
     xil_printf("  DMA:        AXI4 Master via S_AXI_HP0, burst DDR<->DMEM\n\r");
     xil_printf("  GPU Build:  0x%08x\n\r", build_id);
@@ -231,7 +232,10 @@ void print_summary(void)
         xil_printf("  [WARN] Build ID mismatch (exp 0x%08x). Bitstream/app may be out of sync.\n\r",
                    GPU_EXPECT_BUILD_ID);
     }
-    xil_printf("  Peak:       75M instr/s x 8 lanes = 600 MOPS (theoretical)\n\r");
-    xil_printf("  Peak MAC:   75M MAC/s x 8 lanes = 600 MMAC/s (theoretical)\n\r");
-    xil_printf("  Peak INT8:  75M DP4A/s x 8 lanes x 4 = 2400 IMAC/s (theoretical)\n\r");
+    xil_printf("  Peak:       75M instr/s x %d lanes = %d MOPS (theoretical)\n\r",
+               NUM_LANES, 75 * NUM_LANES);
+    xil_printf("  Peak MAC:   75M MAC/s x %d lanes = %d MMAC/s (theoretical)\n\r",
+               NUM_LANES, 75 * NUM_LANES);
+    xil_printf("  Peak INT8:  75M DP4A/s x %d lanes x 4 = %d IMAC/s (theoretical)\n\r",
+               NUM_LANES, 75 * NUM_LANES * 4);
 }

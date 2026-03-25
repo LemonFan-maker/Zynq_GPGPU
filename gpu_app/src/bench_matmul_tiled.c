@@ -20,21 +20,21 @@ void bench_matmul_tiled_run(void)
 #endif
     xil_printf("  [CFG] B-tile reuse across ti: ON\n\r");
 
-    uint32_t stride = 16 * 32;
+    uint32_t stride = 16 * BYTES_PER_ENTRY;
     for (int r = 0; r < 16; r++) {
         for (int c = 0; c < 16; c++) {
             uint32_t val_A = (uint32_t)(r * 16 + c + 1);
             uint32_t val_B = (uint32_t)(r * 16 + c + 1);
             for (int l = 0; l < NUM_LANES; l++) {
-                Xil_Out32(DDR_BUF_A + r * stride + c * 32 + l * 4, val_A);
-                Xil_Out32(DDR_BUF_B + r * stride + c * 32 + l * 4, val_B);
+                Xil_Out32(DDR_BUF_A + r * stride + c * BYTES_PER_ENTRY + l * 4U, val_A);
+                Xil_Out32(DDR_BUF_B + r * stride + c * BYTES_PER_ENTRY + l * 4U, val_B);
             }
         }
     }
 
     for (int i = 0; i < 256; i++)
         for (int l = 0; l < NUM_LANES; l++)
-            Xil_Out32(DDR_C_OUT + i * 32 + l * 4, 0);
+            Xil_Out32(DDR_C_OUT + i * BYTES_PER_ENTRY + l * 4U, 0);
 
     gpu_upload(bench_matmul_pp, bench_matmul_pp_LEN);
     const uint32_t patch_pc_mul0 = 13;
@@ -48,14 +48,14 @@ void bench_matmul_tiled_run(void)
     for (int tj = 0; tj < 2; tj++) {
         // B tiles (tk0/tk1) depend on tj only; preload once and reuse for both ti.
         {
-            uint32_t src_B0 = DDR_BUF_B + (0 * 8 * 16 + tj * 8) * 32;
-            uint32_t src_B1 = DDR_BUF_B + (1 * 8 * 16 + tj * 8) * 32;
+            uint32_t src_B0 = DDR_BUF_B + (0 * 8 * 16 + tj * 8) * BYTES_PER_ENTRY;
+            uint32_t src_B1 = DDR_BUF_B + (1 * 8 * 16 + tj * 8) * BYTES_PER_ENTRY;
             vdma_to_dmem(src_B0, PING_BASE + 64, 8, 8, stride);
             vdma_to_dmem(src_B1, PONG_BASE + 64, 8, 8, stride);
         }
 
         for (int ti = 0; ti < 2; ti++) {
-            uint32_t src_A = DDR_BUF_A + (ti * 8 * 16 + 0 * 8) * 32;
+            uint32_t src_A = DDR_BUF_A + (ti * 8 * 16 + 0 * 8) * BYTES_PER_ENTRY;
             vdma_to_dmem(src_A, PING_BASE, 8, 8, stride);
 
             for (int l = 0; l < NUM_LANES; l++)
@@ -69,7 +69,7 @@ void bench_matmul_tiled_run(void)
 
 #if !B5_DISABLE_OVERLAP
             {
-                uint32_t src_A_next = DDR_BUF_A + (ti * 8 * 16 + 1 * 8) * 32;
+                uint32_t src_A_next = DDR_BUF_A + (ti * 8 * 16 + 1 * 8) * BYTES_PER_ENTRY;
                 // Load only A for tk1; B for tk1 was already preloaded once per tj.
                 vdma_to_dmem(src_A_next, base_by_tk[1], 8, 8, stride);
             }
@@ -85,7 +85,7 @@ void bench_matmul_tiled_run(void)
             }
 #if B5_DISABLE_OVERLAP
             {
-                uint32_t src_A_next = DDR_BUF_A + (ti * 8 * 16 + 1 * 8) * 32;
+                uint32_t src_A_next = DDR_BUF_A + (ti * 8 * 16 + 1 * 8) * BYTES_PER_ENTRY;
                 vdma_to_dmem(src_A_next, base_by_tk[1], 8, 8, stride);
             }
 #endif
@@ -113,7 +113,7 @@ void bench_matmul_tiled_run(void)
             gpu_stop();
             total_gpu_ticks += (t1 - t0);
 
-            uint32_t c_dst = DDR_C_OUT + (ti * 8 * 16 + tj * 8) * 32;
+            uint32_t c_dst = DDR_C_OUT + (ti * 8 * 16 + tj * 8) * BYTES_PER_ENTRY;
             vdma_acc_flush(c_dst, 8, 8, stride);
         }
     }
@@ -125,7 +125,7 @@ void bench_matmul_tiled_run(void)
             uint32_t acc = 0;
             for (int k = 0; k < 16; k++)
                 acc += (uint32_t)(i * 16 + k + 1) * (uint32_t)(k * 16 + j + 1);
-            uint32_t got = Xil_In32(DDR_C_OUT + (i * 16 + j) * 32);
+            uint32_t got = Xil_In32(DDR_C_OUT + (i * 16 + j) * BYTES_PER_ENTRY);
             if (got == acc) {
                 pass++;
             } else if (++fail_cnt <= 3) {

@@ -26,13 +26,14 @@
 #define GPU_DBG_LASTPC (GPU_BASE + 0x030)
 #define GPU_DBG_FLAGS  (GPU_BASE + 0x034)
 #define GPU_BUILD_ID   (GPU_BASE + 0x0FC)
-#define GPU_EXPECT_BUILD_ID 0x26032404U
+#define GPU_EXPECT_BUILD_ID 0x26032501U
 #define GPU_IMEM_BASE  (GPU_BASE + 0x100)
 #define GPU_DMEM_BASE  (GPU_BASE + 0x2000)
 
-#define NUM_LANES 8
-#define DMEM_WR(e,l,v) Xil_Out32(GPU_DMEM_BASE + (e)*32 + (l)*4, (v))
-#define DMEM_RD(e,l)   Xil_In32(GPU_DMEM_BASE + (e)*32 + (l)*4)
+#define NUM_LANES 16
+#define BYTES_PER_ENTRY (NUM_LANES * 4U)
+#define DMEM_WR(e,l,v) Xil_Out32(GPU_DMEM_BASE + (e) * BYTES_PER_ENTRY + (l) * 4U, (v))
+#define DMEM_RD(e,l)   Xil_In32(GPU_DMEM_BASE + (e) * BYTES_PER_ENTRY + (l) * 4U)
 
 #define DDR_BUF_A  0x10000000
 #define DDR_BUF_B  0x10100000

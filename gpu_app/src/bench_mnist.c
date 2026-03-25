@@ -4,22 +4,114 @@
 #include "mnist_fc_data.h"
 #include "xil_cache.h"
 
-static inline int16_t wblk_get(const int16_t *blocks, int blocks_per_row, int row, int col)
+#define MNIST_A1_Q_SHIFT 20
+#define MNIST_A1_Q_MUL ((int32_t)(MNIST_FC_X_SCALE * MNIST_FC_W1_SCALE * 127.0f * (float)(1U << MNIST_A1_Q_SHIFT) + 0.5f))
+
+static inline void fc1_blocked_accumulate(
+    const uint8_t *x_row,
+    int32_t *acc_h,
+    int in_dim,
+    int hid_dim,
+    int tile,
+    int w1_blocks_per_row
+)
 {
-    const int tile = MNIST_FC_TILE;
-    const int rb = row / tile;
-    const int cb = col / tile;
-    const int ri = row % tile;
-    const int ci = col % tile;
-    const int block_idx = rb * blocks_per_row + cb;
-    const int block_base = block_idx * tile * tile;
-    return blocks[block_base + ri * tile + ci];
+    const int rb_cnt = in_dim / tile;
+    const int block_elems = tile * tile;
+    for (int rb = 0; rb < rb_cnt; rb++) {
+        const uint8_t *x_blk = x_row + rb * tile;
+        for (int cb = 0; cb < w1_blocks_per_row; cb++) {
+            const int16_t *blk = &mnist_fc_w1_blocks[(rb * w1_blocks_per_row + cb) * block_elems];
+            const int h_base = cb * tile;
+            for (int ri = 0; ri < tile; ri++) {
+                const int32_t xi = (int32_t)x_blk[ri];
+                const int16_t *w_row = blk + ri * tile;
+                for (int ci = 0; ci < tile; ci++) {
+                    acc_h[h_base + ci] += xi * (int32_t)w_row[ci];
+                }
+            }
+        }
+    }
+}
+
+static inline void fc1_fast_accumulate(const uint8_t *x_row, int32_t *acc_h, int in_dim, int hid_dim)
+{
+    for (int i = 0; i < in_dim; i++) {
+        const int32_t xi = (int32_t)x_row[i];
+        const int8_t *w_row = &mnist_fc_w1_q[i * hid_dim];
+        for (int h = 0; h < hid_dim; h++) {
+            acc_h[h] += xi * (int32_t)w_row[h];
+        }
+    }
+}
+
+static inline void requant_relu_u8_127(const int32_t *acc_h, uint8_t *a1_q, int hid_dim, int32_t mul, int32_t round)
+{
+    for (int h = 0; h < hid_dim; h++) {
+        int32_t acc = acc_h[h];
+        if (acc < 0) acc = 0;
+        int32_t q = (int32_t)(((int64_t)acc * (int64_t)mul + (int64_t)round) >> MNIST_A1_Q_SHIFT);
+        if (q > 127) q = 127;
+        a1_q[h] = (uint8_t)q;
+    }
+}
+
+static inline void fc2_blocked_accumulate(
+    const uint8_t *a1_q,
+    int32_t *logits,
+    int hid_dim,
+    int out_dim,
+    int tile,
+    int w2_blocks_per_row
+)
+{
+    const int rb_cnt = hid_dim / tile;
+    const int block_elems = tile * tile;
+    for (int rb = 0; rb < rb_cnt; rb++) {
+        const uint8_t *a_blk = a1_q + rb * tile;
+        for (int cb = 0; cb < w2_blocks_per_row; cb++) {
+            const int16_t *blk = &mnist_fc_w2_blocks[(rb * w2_blocks_per_row + cb) * block_elems];
+            const int o_base = cb * tile;
+            const int o_valid = (o_base + tile <= out_dim) ? tile : (out_dim - o_base);
+            for (int ri = 0; ri < tile; ri++) {
+                const int32_t ai = (int32_t)a_blk[ri];
+                const int16_t *w_row = blk + ri * tile;
+                for (int ci = 0; ci < o_valid; ci++) {
+                    logits[o_base + ci] += ai * (int32_t)w_row[ci];
+                }
+            }
+        }
+    }
+}
+
+static inline void fc2_fast_accumulate(const uint8_t *a1_q, int32_t *logits, int hid_dim, int out_dim)
+{
+    for (int h = 0; h < hid_dim; h++) {
+        const int32_t ai = (int32_t)a1_q[h];
+        const int8_t *w_row = &mnist_fc_w2_q[h * out_dim];
+        for (int o = 0; o < out_dim; o++) {
+            logits[o] += ai * (int32_t)w_row[o];
+        }
+    }
+}
+
+static inline int argmax_i32(const int32_t *x, int n)
+{
+    int best_i = 0;
+    int32_t best_v = x[0];
+    for (int i = 1; i < n; i++) {
+        if (x[i] > best_v) {
+            best_v = x[i];
+            best_i = i;
+        }
+    }
+    return best_i;
 }
 
 void bench_mnist_fc(void)
 {
     xil_printf("\n\r========================================\n\r");
-    xil_printf("  Benchmark 6: MNIST FC (ARM blocked vs fast)\n\r");
+    xil_printf("  Benchmark 6: MNIST FC INT8 (ARM blocked vs fast)\n\r");
     xil_printf("========================================\n\r");
     xil_printf("  Note: DCache enabled for this benchmark\n\r");
 
@@ -34,40 +126,31 @@ void bench_mnist_fc(void)
     const int w2_padded_cols = ((out_dim + MNIST_FC_TILE - 1) / MNIST_FC_TILE) * MNIST_FC_TILE;
     const int w2_blocks_per_row = w2_padded_cols / MNIST_FC_TILE;
 
-    const float s1 = MNIST_FC_X_SCALE * MNIST_FC_W1_SCALE;
-    const float s2 = MNIST_FC_W2_SCALE;
-    const float b2_scale = (MNIST_FC_W2_SCALE / 127.0f);
+    const int32_t a1_q_mul = MNIST_A1_Q_MUL;
+    const int32_t a1_q_round = (1 << (MNIST_A1_Q_SHIFT - 1));
 
     int pass_block = 0;
     int pass_fast = 0;
-    float a1[MNIST_FC_HIDDEN_DIM];
+    uint8_t a1_q[MNIST_FC_HIDDEN_DIM];
+    int32_t acc_h[MNIST_FC_HIDDEN_DIM];
+    int32_t logits[MNIST_FC_OUT_DIM];
 
     uint64_t t0 = timer_now();
     for (int n = 0; n < samples; n++) {
-        for (int h = 0; h < hid_dim; h++) {
-            int32_t acc = mnist_fc_b1_q[h];
-            const int x_base = n * in_dim;
-            for (int i = 0; i < in_dim; i++) {
-                const int16_t wq = wblk_get(mnist_fc_w1_blocks, w1_blocks_per_row, i, h);
-                acc += (int32_t)mnist_fc_x_q[x_base + i] * (int32_t)wq;
-            }
-            if (acc < 0) acc = 0;
-            a1[h] = (float)acc * s1;
-        }
+        const uint8_t *x_row = &mnist_fc_x_q[n * in_dim];
 
-        int pred = 0;
-        float best = -1e30f;
-        for (int o = 0; o < out_dim; o++) {
-            float logit = (float)mnist_fc_b2_q[o] * b2_scale;
-            for (int h = 0; h < hid_dim; h++) {
-                const int16_t wq = wblk_get(mnist_fc_w2_blocks, w2_blocks_per_row, h, o);
-                logit += a1[h] * ((float)wq * s2);
-            }
-            if (o == 0 || logit > best) {
-                best = logit;
-                pred = o;
-            }
+        for (int h = 0; h < hid_dim; h++) {
+            acc_h[h] = mnist_fc_b1_q[h];
         }
+        fc1_blocked_accumulate(x_row, acc_h, in_dim, hid_dim, MNIST_FC_TILE, w1_blocks_per_row);
+        requant_relu_u8_127(acc_h, a1_q, hid_dim, a1_q_mul, a1_q_round);
+
+        for (int o = 0; o < out_dim; o++) {
+            logits[o] = mnist_fc_b2_q[o];
+        }
+        fc2_blocked_accumulate(a1_q, logits, hid_dim, out_dim, MNIST_FC_TILE, w2_blocks_per_row);
+
+        const int pred = argmax_i32(logits, out_dim);
         if (pred == (int)mnist_fc_y[n])
             pass_block++;
     }
@@ -75,30 +158,20 @@ void bench_mnist_fc(void)
 
     uint64_t t2 = timer_now();
     for (int n = 0; n < samples; n++) {
-        for (int h = 0; h < hid_dim; h++) {
-            int32_t acc = mnist_fc_b1_q[h];
-            const int x_base = n * in_dim;
-            for (int i = 0; i < in_dim; i++) {
-                const int8_t wq = mnist_fc_w1_q[i * hid_dim + h];
-                acc += (int32_t)mnist_fc_x_q[x_base + i] * (int32_t)wq;
-            }
-            if (acc < 0) acc = 0;
-            a1[h] = (float)acc * s1;
-        }
+        const uint8_t *x_row = &mnist_fc_x_q[n * in_dim];
 
-        int pred = 0;
-        float best = -1e30f;
-        for (int o = 0; o < out_dim; o++) {
-            float logit = (float)mnist_fc_b2_q[o] * b2_scale;
-            for (int h = 0; h < hid_dim; h++) {
-                const int8_t wq = mnist_fc_w2_q[h * out_dim + o];
-                logit += a1[h] * ((float)wq * s2);
-            }
-            if (o == 0 || logit > best) {
-                best = logit;
-                pred = o;
-            }
+        for (int h = 0; h < hid_dim; h++) {
+            acc_h[h] = mnist_fc_b1_q[h];
         }
+        fc1_fast_accumulate(x_row, acc_h, in_dim, hid_dim);
+        requant_relu_u8_127(acc_h, a1_q, hid_dim, a1_q_mul, a1_q_round);
+
+        for (int o = 0; o < out_dim; o++) {
+            logits[o] = mnist_fc_b2_q[o];
+        }
+        fc2_fast_accumulate(a1_q, logits, hid_dim, out_dim);
+
+        const int pred = argmax_i32(logits, out_dim);
         if (pred == (int)mnist_fc_y[n])
             pass_fast++;
     }

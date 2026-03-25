@@ -1,6 +1,8 @@
 `timescale 1ns / 1ps
 
-module gpu_dma_ctrl (
+module gpu_dma_ctrl #(
+    parameter int NUM_LANES = 16
+) (
     input  logic        clk,
     input  logic        rst_n,
 
@@ -15,13 +17,13 @@ module gpu_dma_ctrl (
     output logic        dma_busy,
 
     output logic [11:0] dmem_addr,
-    output logic [7:0]  dmem_we,
-    output logic [255:0] dmem_wdata,
-    input  logic [255:0] dmem_rdata,
+    output logic [NUM_LANES-1:0] dmem_we,
+    output logic [NUM_LANES*32-1:0] dmem_wdata,
+    input  logic [NUM_LANES*32-1:0] dmem_rdata,
     output logic        dmem_active,
 
     output logic [5:0]  acc_rd_addr,
-    input  logic [255:0] acc_rdata,
+    input  logic [NUM_LANES*32-1:0] acc_rdata,
 
     output logic [31:0] M_AXI_AWADDR,
     output logic [7:0]  M_AXI_AWLEN,
@@ -77,6 +79,7 @@ module gpu_dma_ctrl (
 
     typedef enum logic [4:0] {
         S_IDLE,
+        // DDR -> DMEM
         S_RD_CALC,
         S_RD_ADDR,
         S_RD_DATA,
@@ -99,21 +102,25 @@ module gpu_dma_ctrl (
 
     logic [31:0] ddr_addr;
     logic [11:0] dmem_idx;
-    logic [11:0] entries_remaining; // x entries remaining in current row
-    logic [11:0] rows_remaining;    // y rows remaining
-    logic [31:0] row_start_ddr;     // starting DDR addr of current row
-    logic [11:0] saved_x_size;      // to reload entries_remaining at next row
-    logic [31:0] saved_stride;      // to add to row_start_ddr
+    logic [11:0] entries_remaining;
+    logic [11:0] rows_remaining;
+    logic [31:0] row_start_ddr;
+    logic [11:0] saved_x_size;
+    logic [31:0] saved_stride;
     logic        dir_reg;
     logic        acc_mode_latch;
 
-    logic [255:0] acc_data;
-    logic [2:0]   beat_cnt;
+    localparam int DMEM_DATA_W = NUM_LANES * 32;
+    localparam int LANE_CNT_W  = (NUM_LANES <= 1) ? 1 : $clog2(NUM_LANES);
+
+    logic [DMEM_DATA_W-1:0] acc_data;
+    logic [LANE_CNT_W-1:0]  beat_cnt;
+
     logic [7:0]  burst_len;
     logic [8:0]  burst_beats_left;
 
-    logic [255:0] wr_data_latch;
-    logic [2:0]   wr_beat_cnt;
+    logic [DMEM_DATA_W-1:0] wr_data_latch;
+    logic [LANE_CNT_W-1:0]  wr_beat_cnt;
 
     logic [11:0] dmem_wr_addr;
 
@@ -122,12 +129,13 @@ module gpu_dma_ctrl (
         input logic [11:0] entries;
         logic [11:0] bytes_to_boundary;
         logic [8:0]  beats_to_boundary;
-        logic [8:0]  beats_for_entries;
+        int          beats_for_entries;
     begin
         bytes_to_boundary = 12'hFFF - addr[11:0] + 1'b1;
         beats_to_boundary = bytes_to_boundary >> 2;
         if (beats_to_boundary == 0) beats_to_boundary = 9'd256;
-        beats_for_entries = (entries >= 12'd32) ? 9'd256 : {entries[4:0], 3'b000};
+        beats_for_entries = entries * NUM_LANES;
+        if (beats_for_entries > 256) beats_for_entries = 256;
         calc_burst_beats = (beats_to_boundary < beats_for_entries) ?
                            beats_to_boundary : beats_for_entries;
         if (calc_burst_beats > 9'd256) calc_burst_beats = 9'd256;
@@ -140,7 +148,7 @@ module gpu_dma_ctrl (
 
     always_comb begin
         dmem_addr  = (state == S_RD_DMEM_WR) ? dmem_wr_addr : dmem_idx;
-        dmem_we    = (state == S_RD_DMEM_WR) ? 8'b11111111 : 8'b00000000;
+        dmem_we    = (state == S_RD_DMEM_WR) ? {NUM_LANES{1'b1}} : {NUM_LANES{1'b0}};
         dmem_wdata = acc_data;
     end
 
@@ -156,16 +164,7 @@ module gpu_dma_ctrl (
     always_comb begin
         M_AXI_WVALID = (state == S_WR_DATA);
         M_AXI_WLAST  = (state == S_WR_DATA) && (burst_beats_left == 9'd1);
-        case (wr_beat_cnt)
-            3'd0: M_AXI_WDATA = wr_data_latch[31:0];
-            3'd1: M_AXI_WDATA = wr_data_latch[63:32];
-            3'd2: M_AXI_WDATA = wr_data_latch[95:64];
-            3'd3: M_AXI_WDATA = wr_data_latch[127:96];
-            3'd4: M_AXI_WDATA = wr_data_latch[159:128];
-            3'd5: M_AXI_WDATA = wr_data_latch[191:160];
-            3'd6: M_AXI_WDATA = wr_data_latch[223:192];
-            3'd7: M_AXI_WDATA = wr_data_latch[255:224];
-        endcase
+        M_AXI_WDATA = wr_data_latch[(wr_beat_cnt * 32) +: 32];
     end
 
     always_ff @(posedge clk or negedge rst_n) begin
@@ -180,12 +179,12 @@ module gpu_dma_ctrl (
             saved_x_size      <= 12'h0;
             saved_stride      <= 32'h0;
             dir_reg           <= 1'b0;
-            acc_data          <= 256'h0;
-            beat_cnt          <= 3'd0;
+            acc_data          <= '0;
+            beat_cnt          <= '0;
             burst_len         <= 8'd0;
             burst_beats_left  <= 9'd0;
-            wr_data_latch     <= 256'h0;
-            wr_beat_cnt       <= 3'd0;
+            wr_data_latch     <= '0;
+            wr_beat_cnt       <= '0;
             acc_mode_latch    <= 1'b0;
         end else begin
             case (state)
@@ -216,7 +215,7 @@ module gpu_dma_ctrl (
                 S_RD_CALC: begin
                     burst_len        <= calc_burst_beats(ddr_addr, entries_remaining) - 9'd1;
                     burst_beats_left <= calc_burst_beats(ddr_addr, entries_remaining);
-                    beat_cnt         <= 3'd0;
+                    beat_cnt         <= '0;
                     state            <= S_RD_ADDR;
                 end
 
@@ -228,21 +227,12 @@ module gpu_dma_ctrl (
 
                 S_RD_DATA: begin
                     if (M_AXI_RVALID) begin
-                        case (beat_cnt)
-                            3'd0: acc_data[31:0]    <= M_AXI_RDATA;
-                            3'd1: acc_data[63:32]   <= M_AXI_RDATA;
-                            3'd2: acc_data[95:64]   <= M_AXI_RDATA;
-                            3'd3: acc_data[127:96]  <= M_AXI_RDATA;
-                            3'd4: acc_data[159:128] <= M_AXI_RDATA;
-                            3'd5: acc_data[191:160] <= M_AXI_RDATA;
-                            3'd6: acc_data[223:192] <= M_AXI_RDATA;
-                            3'd7: acc_data[255:224] <= M_AXI_RDATA;
-                        endcase
-                        beat_cnt         <= beat_cnt + 3'd1;
+                        acc_data[(beat_cnt * 32) +: 32] <= M_AXI_RDATA;
+                        beat_cnt         <= beat_cnt + {{(LANE_CNT_W-1){1'b0}}, 1'b1};
                         burst_beats_left <= burst_beats_left - 9'd1;
                         ddr_addr         <= ddr_addr + 32'd4;
 
-                        if (beat_cnt == 3'd7) begin
+                        if (beat_cnt == (NUM_LANES - 1)) begin
                             dmem_wr_addr      <= dmem_idx;
                             dmem_idx          <= dmem_idx + 12'd1;
                             entries_remaining <= entries_remaining - 12'd1;
@@ -285,7 +275,7 @@ module gpu_dma_ctrl (
 
                 S_WR_DMEM_LATCH: begin
                     wr_data_latch     <= acc_mode_latch ? acc_rdata : dmem_rdata;
-                    wr_beat_cnt       <= 3'd0;
+                    wr_beat_cnt       <= '0;
                     dmem_idx          <= dmem_idx + 12'd1;
                     entries_remaining <= entries_remaining - 12'd1;
                     state             <= S_WR_ADDR;
@@ -299,13 +289,13 @@ module gpu_dma_ctrl (
 
                 S_WR_DATA: begin
                     if (M_AXI_WREADY) begin
-                        wr_beat_cnt      <= wr_beat_cnt + 3'd1;
+                        wr_beat_cnt      <= wr_beat_cnt + {{(LANE_CNT_W-1){1'b0}}, 1'b1};
                         burst_beats_left <= burst_beats_left - 9'd1;
                         ddr_addr         <= ddr_addr + 32'd4;
 
                         if (burst_beats_left == 9'd1) begin
                             state <= S_WR_RESP;
-                        end else if (wr_beat_cnt == 3'd7) begin
+                        end else if (wr_beat_cnt == (NUM_LANES - 1)) begin
                             state <= S_WR_NEXT_RD;
                         end
                     end
@@ -317,7 +307,7 @@ module gpu_dma_ctrl (
 
                 S_WR_NEXT_LATCH: begin
                     wr_data_latch     <= acc_mode_latch ? acc_rdata : dmem_rdata;
-                    wr_beat_cnt       <= 3'd0;
+                    wr_beat_cnt       <= '0;
                     dmem_idx          <= dmem_idx + 12'd1;
                     entries_remaining <= entries_remaining - 12'd1;
                     state             <= S_WR_DATA;

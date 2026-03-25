@@ -16,14 +16,14 @@ void bench_dma(void)
 
     for (uint32_t i = 0; i < 4096; i++)
         for (int l = 0; l < NUM_LANES; l++)
-            Xil_Out32(DDR_BUF_A + i * 32 + l * 4, i);
+            Xil_Out32(DDR_BUF_A + i * BYTES_PER_ENTRY + l * 4U, i);
 
     xil_printf("  entries | DDR->DMEM  | DMEM->DDR  |  bytes  | BW_in MB/s | BW_out MB/s\n\r");
     xil_printf("  --------|------------|------------|---------|------------|------------\n\r");
 
     for (int s = 0; s < nsizes; s++) {
         uint32_t n = sizes[s];
-        uint32_t bytes = n * 32;
+        uint32_t bytes = n * BYTES_PER_ENTRY;
         uint64_t t0, t1, dt_in, dt_out;
 
         t0 = timer_now();
@@ -56,7 +56,7 @@ void bench_dma(void)
     uint64_t t1 = timer_now();
     uint32_t us_axilite = ticks_to_us(t1 - t0);
     if (us_axilite == 0) us_axilite = 1;
-    uint32_t bw_axilite = (256 * 32) / us_axilite;
+    uint32_t bw_axilite = (256 * BYTES_PER_ENTRY) / us_axilite;
 
     t0 = timer_now();
     dma_to_dmem(DDR_BUF_A, 0, 256);
@@ -65,7 +65,8 @@ void bench_dma(void)
     if (us_dma256 == 0) us_dma256 = 1;
 
     xil_printf("  AXI-Lite write 256 entries: %d us (%d MB/s)\n\r", us_axilite, bw_axilite);
-    xil_printf("  DMA      write 256 entries: %d us (%d MB/s)\n\r", us_dma256, (256*32)/us_dma256);
+    xil_printf("  DMA      write 256 entries: %d us (%d MB/s)\n\r", us_dma256,
+               (256 * BYTES_PER_ENTRY) / us_dma256);
     xil_printf("  Speedup: %dx\n\r", us_axilite / us_dma256);
 }
 
@@ -77,8 +78,8 @@ void bench_vecadd_run(void)
 
     for (uint32_t i = 0; i < 256; i++) {
         for (int l = 0; l < NUM_LANES; l++) {
-            Xil_Out32(DDR_BUF_A + i * 32 + l * 4, i + 1);
-            Xil_Out32(DDR_BUF_A + (256 + i) * 32 + l * 4, 1000);
+            Xil_Out32(DDR_BUF_A + i * BYTES_PER_ENTRY + l * 4U, i + 1);
+            Xil_Out32(DDR_BUF_A + (256 + i) * BYTES_PER_ENTRY + l * 4U, 1000);
         }
     }
 
@@ -95,7 +96,7 @@ void bench_vecadd_run(void)
 
     int pass = 0, vfail = 0;
     for (uint32_t i = 0; i < 256; i++) {
-        uint32_t got = Xil_In32(DDR_BUF_B + i * 32);
+        uint32_t got = Xil_In32(DDR_BUF_B + i * BYTES_PER_ENTRY);
         if (got == i + 1 + 1000) {
             pass++;
         } else if (++vfail <= 3) {
@@ -128,9 +129,11 @@ void bench_conv2d(void)
         411, 456, 501, 636, 681, 726, 861, 906, 951
     };
 
-    for (int i = 0; i < 25; i++)
-        for (int l = 0; l < NUM_LANES; l++)
-            Xil_Out32(DDR_BUF_A + i * 32 + l * 4, i + 1);
+    for (int i = 0; i < 25; i++) {
+        for (int l = 0; l < NUM_LANES; l++) {
+            Xil_Out32(DDR_BUF_A + i * BYTES_PER_ENTRY + l * 4U, i + 1);
+        }
+    }
 
     uint64_t t_load_start = timer_now();
     dma_to_dmem(DDR_BUF_A, 0, 25);
@@ -149,7 +152,7 @@ void bench_conv2d(void)
 
     int pass = 0;
     for (int i = 0; i < 9; i++) {
-        uint32_t got = Xil_In32(DDR_BUF_B + i * 32);
+        uint32_t got = Xil_In32(DDR_BUF_B + i * BYTES_PER_ENTRY);
         if (got == expected[i])
             pass++;
         else
@@ -179,8 +182,8 @@ void bench_matmul_run(void)
 
     for (int i = 0; i < 64; i++) {
         for (int l = 0; l < NUM_LANES; l++) {
-            Xil_Out32(DDR_BUF_A + i * 32 + l * 4, i + 1);
-            Xil_Out32(DDR_BUF_A + (64 + i) * 32 + l * 4, i + 1);
+            Xil_Out32(DDR_BUF_A + i * BYTES_PER_ENTRY + l * 4U, i + 1);
+            Xil_Out32(DDR_BUF_A + (64 + i) * BYTES_PER_ENTRY + l * 4U, i + 1);
         }
     }
 
@@ -201,7 +204,7 @@ void bench_matmul_run(void)
             uint32_t acc = 0;
             for (int k = 0; k < 8; k++)
                 acc += (uint32_t)(i * 8 + k + 1) * (uint32_t)(k * 8 + j + 1);
-            uint32_t got = Xil_In32(DDR_BUF_B + (i * 8 + j) * 32);
+            uint32_t got = Xil_In32(DDR_BUF_B + (i * 8 + j) * BYTES_PER_ENTRY);
             if (got == acc) {
                 pass++;
             } else if (++fail <= 3) {
@@ -233,16 +236,16 @@ void bench_vdma_2d(void)
     xil_printf("  Benchmark VDMA: 2D Tile Extraction\n\r");
     xil_printf("========================================\n\r");
 
-    uint32_t stride = 64 * 32;
+    uint32_t stride = 64 * BYTES_PER_ENTRY;
     for (int r = 0; r < 64; r++) {
         for (int c = 0; c < 64; c++) {
             for (int l = 0; l < NUM_LANES; l++) {
-                Xil_Out32(DDR_BUF_A + r * stride + c * 32 + l * 4, r * 1000 + c);
+                Xil_Out32(DDR_BUF_A + r * stride + c * BYTES_PER_ENTRY + l * 4U, r * 1000 + c);
             }
         }
     }
 
-    uint32_t start_addr = DDR_BUF_A + 10 * stride + 5 * 32;
+    uint32_t start_addr = DDR_BUF_A + 10 * stride + 5 * BYTES_PER_ENTRY;
     uint32_t x_items = 4;
     uint32_t y_items = 4;
 

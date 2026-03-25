@@ -1,7 +1,9 @@
 `timescale 1ns / 1ps
 import gpu_types_pkg::*;
 
-module gpu_core_top (
+module gpu_core_top #(
+    parameter int NUM_LANES = 16
+) (
     input  logic        clk,
     input  logic        rst_n,
     input  logic        start_pulse,
@@ -10,16 +12,16 @@ module gpu_core_top (
     input  logic [31:0] in_imem_data,
 
     output logic        out_dmem_re,
-    output logic [7:0]  out_dmem_we,
+    output logic [NUM_LANES-1:0]  out_dmem_we,
     output logic [31:0] out_dmem_addr,
-    output logic [255:0] out_dmem_wdata,
-    input  logic [255:0] in_dmem_rdata,
+    output logic [NUM_LANES*32-1:0] out_dmem_wdata,
+    input  logic [NUM_LANES*32-1:0] in_dmem_rdata,
 
-    output logic [7:0]  out_flag_zero,
+    output logic [NUM_LANES-1:0]  out_flag_zero,
 
     input  logic        in_acc_clr,
     input  logic [5:0]  in_acc_rd_addr,
-    output logic [255:0] out_acc_rd_data,
+    output logic [NUM_LANES*32-1:0] out_acc_rd_data,
 
     output logic        gpu_done
 );
@@ -194,7 +196,7 @@ module gpu_core_top (
         .out_halt     (dec_halt)
     );
 
-    gpu_exec_unit #(.NUM_LANES(8)) u_exec_unit (
+    gpu_exec_unit #(.NUM_LANES(NUM_LANES)) u_exec_unit (
         .clk            (clk),
         .rst_n          (rst_n),
         .in_we          (id_ex_we),
