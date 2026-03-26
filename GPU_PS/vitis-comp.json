@@ -2,8 +2,8 @@
   "name": "GPU_PS",
   "type": "PLATFORM",
   "configuration": {
-    "description": "A Simple GPGPU model",
-    "xsa": "/home/orionisli/Zynq_GPGPU_Core/gpu_system_wrapper.xsa",
+    "description": "",
+    "xsa": "/mnt/c9484bc0-c4b3-443c-8378-d72c9f78d3d8/Working/Zynq_GPGPU/gpu_system_wrapper.xsa",
     "xsaPathInPlatform": "GPU_PS/hw/gpu_system_wrapper.xsa",
     "emulationXsa": "",
     "emulationXsaPathInPlatform": "",

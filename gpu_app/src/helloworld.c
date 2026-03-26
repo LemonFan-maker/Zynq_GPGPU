@@ -24,8 +24,8 @@ int main()
     bench_mnist_fc();
     bench_dp4a_smoke();
     bench_dp4a_accumulator();
-    bench_dp4a_sustained();
-
+    bench_dp4a_sustained();    
+    bench_lenet_run();
     xil_printf("\n\r########################################\n\r");
     xil_printf("#  Benchmark Complete                  #\n\r");
     xil_printf("########################################\n\r");

@@ -7,6 +7,7 @@ void bench_conv2d(void);
 void bench_matmul_run(void);
 void bench_matmul_tiled_run(void);
 void bench_mnist_fc(void);
+void bench_lenet_run(void);
 void bench_dp4a_smoke(void);
 void bench_dp4a_accumulator(void);
 void bench_dp4a_sustained(void);

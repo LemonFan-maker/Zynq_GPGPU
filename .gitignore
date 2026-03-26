@@ -33,7 +33,9 @@ Zynq_GPGPU_Core.srcs/utils_1/
 # IP 升级日志
 ip_upgrade.log
 
-# 一些没啥用的html
+# 一些没啥用的文件
+__pycache__
+*.pyc
 *.html
 
 # =========================
