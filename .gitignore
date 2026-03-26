@@ -25,13 +25,16 @@ Zynq_GPGPU_Core.ip_user_files/
 *.wdb
 *.wpc
 
-# Block Design 自动生成文件 (保留 .bd 和 .xci)
+# Block Design 自动生成文件
 Zynq_GPGPU_Core.srcs/sources_1/bd/gpu_system/ui/
 Zynq_GPGPU_Core.srcs/sources_1/bd/gpu_system/*.bda
 Zynq_GPGPU_Core.srcs/utils_1/
 
 # IP 升级日志
 ip_upgrade.log
+
+# 一些没啥用的html
+*.html
 
 # =========================
 # Vitis / BSP / PS 生成文件

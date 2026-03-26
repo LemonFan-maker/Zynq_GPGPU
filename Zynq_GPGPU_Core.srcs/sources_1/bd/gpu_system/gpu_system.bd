@@ -920,6 +920,9 @@
           "PCW_S_AXI_HP0_DATA_WIDTH": {
             "value": "32"
           },
+          "PCW_S_AXI_HP0_ID_WIDTH": {
+            "value": "6"
+          },
           "PCW_TPIU_PERIPHERAL_CLKSRC": {
             "value": "External"
           },
@@ -1279,6 +1282,9 @@
           },
           "PCW_WDT_PERIPHERAL_ENABLE": {
             "value": "0"
+          },
+          "preset": {
+            "value": "None"
           }
         },
         "interface_ports": {
@@ -2192,8 +2198,8 @@
               "auto_pc": {
                 "vlnv": "xilinx.com:ip:axi_protocol_converter:2.1",
                 "ip_revision": "37",
-                "xci_name": "gpu_system_axi_mem_intercon_imp_auto_pc_2",
-                "xci_path": "ip/gpu_system_axi_mem_intercon_imp_auto_pc_2/gpu_system_axi_mem_intercon_imp_auto_pc_2.xci",
+                "xci_name": "gpu_system_axi_mem_intercon_imp_auto_pc_0",
+                "xci_path": "ip/gpu_system_axi_mem_intercon_imp_auto_pc_0/gpu_system_axi_mem_intercon_imp_auto_pc_0.xci",
                 "inst_hier_path": "axi_mem_intercon/s00_couplers/auto_pc",
                 "has_run_ip_tcl": "true",
                 "parameters": {
